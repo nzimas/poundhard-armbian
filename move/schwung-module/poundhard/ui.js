@@ -281,6 +281,12 @@ let shufOn = false, shufHeld = false;
 let quakeOn = false, quakeHeld = false;
 let churnOn = false, churnHeld = false;
 let brkOn = false, brkHeld = false, brkEvery = 4, brkNow = false, brkTweaked = false;
+/* How long the BREAK interval stays on screen after the last jog detent. It used to be a
+ * showAction() — small type, gone in 24 ticks — which is unreadable while you are still
+ * turning the wheel and choosing. Held roughly four seconds and refreshed on every detent,
+ * so it stays up for as long as you are dialling and lingers afterwards to be read. */
+let brkView = 0;
+const BRK_VIEW_TICKS = 120;
 let strobeOn = false, strobeHeld = false;
 let whimOn = false, whimHeld = false;
 /* the intervals worth having: musical multiples, not every integer */
@@ -947,6 +953,15 @@ function drawRateBig(t) {
 /* Project-wide transpose, in the same giant type as the other transient readouts. The sign
    is always shown — "+0" and "0" read very differently at a glance when you are checking
    whether you are back at concert pitch. */
+function drawBrkBig() {
+    clear_screen();
+    print(0, 0, 'BREAK EVERY', 1);
+    /* the value alone in giant type — "1/8" reads as a fraction and invites the wrong
+     * reading, so the unit goes on its own line underneath */
+    drawBig('' + brkEvery, 4, 11);
+    print(0, 56, brkEvery === 1 ? 'pattern cycle' : 'pattern cycles', 1);
+}
+
 function drawXposeBig() {
     clear_screen();
     print(0, 0, 'TRANSPOSE ALL TRACKS', 1);
@@ -1128,6 +1143,7 @@ function drawScreen() {
     if (patView || projView) { drawSlots(); return; }
     if (fxView) { drawFx(); return; }
     if (stepEditCell >= 0) { drawStepParam(); return; }
+    if (phase < brkView) { drawBrkBig(); return; }
     if (phase < xposeUntil) { drawXposeBig(); return; }
     if (rateView >= 0 && phase < rateViewUntil) { drawRateBig(rateView); return; }
     if ((trackHeld >= 0 && trackActive) || (editTrack >= 0 && knobShow)) { drawTrackParam(); return; }
@@ -1357,7 +1373,7 @@ globalThis.init = function () {
     tempoLocal = 120; tempoDirty = false; controlDirty = false;
     heldCell = -1; heldStart = 0; heldStepEdit = false; stepEditCell = -1;
     trackHeld = -1; trackHeldStart = 0; trackActive = false; knobShow = null;
-    rateView = -1; rateViewUntil = 0; xpose = 0; xposeUntil = 0;
+    rateView = -1; rateViewUntil = 0; xpose = 0; xposeUntil = 0; brkView = 0;
     fxView = false; fxHeld = -1;
     fxTop = new Array(N_TRACKS).fill(-1); fxBypass = new Array(N_TRACKS).fill(false);
     fxOn = []; for (var qi = 0; qi < N_TRACKS; qi++) fxOn.push([]);
@@ -1419,6 +1435,7 @@ globalThis.tick = function () {
     }
     if (rateView >= 0 && phase >= rateViewUntil) { rateView = -1; screenDirty = true; }
     if (xposeUntil && phase >= xposeUntil) { xposeUntil = 0; screenDirty = true; }
+    if (brkView && phase >= brkView) { brkView = 0; screenDirty = true; }
     /* advance the local beat clock that drives the step-button pulse (re-anchored to
      * play-start so the pulse tracks the sequence pace; tempo comes from status). */
     var _now = Date.now();
@@ -1799,7 +1816,9 @@ globalThis.onMidiMessageInternal = function (data) {
         }
         if (cell === BREAK_CELL) {                         /* Break pad down: arm the toggle,
                                                             * and hold = set the interval */
-            brkHeld = true; brkTweaked = false; ledDirty = true; screenDirty = true;
+            brkHeld = true; brkTweaked = false;
+            brkView = phase + BRK_VIEW_TICKS;   /* show the value on the way in */
+            ledDirty = true; screenDirty = true;
             return;
         }
         if (cell === STROBE_CELL) {                        /* Strobe pad down: arm the toggle */
@@ -2146,7 +2165,7 @@ globalThis.onMidiMessageInternal = function (data) {
                     brkEvery = BRK_STEPS[idx];
                     brkTweaked = true;
                     sendCmd('breakint', -1, { p: { n: brkEvery } });
-                    showAction('BREAK EVERY ' + brkEvery);
+                    brkView = phase + BRK_VIEW_TICKS;   /* refreshed on every detent */
                     screenDirty = true;
                     return;
                 }

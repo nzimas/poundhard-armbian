@@ -1692,6 +1692,12 @@ fingerprint is identical before, during and after a run.
 
 ### Break
 
+**Hold the BREAK pad and turn the jog wheel** to set how many pattern cycles pass
+between drops. The value appears in the giant type and stays for about four seconds
+after the last detent — long enough to read while you are still choosing, rather than
+flashing past in small text.
+
+
 The fifth temporary modifier. Every N pattern cycles Break takes over for **one cycle**,
 transforms what the rig is playing, and hands it straight back. **Hold the pad and turn the
 jog wheel** to set the interval — 1, 2, 3, 4, 6, 8, 12, 16, 24 or 32 cycles, default 4. A
