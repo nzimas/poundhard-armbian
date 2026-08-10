@@ -907,7 +907,13 @@ material already written.
 
 #### Transposing
 
-**Cursor up / down transposes the WHOLE PROJECT**, one semitone per press, up to ±24. It is
+**Cursor up / down transposes what you are looking at.** With a track open in the edit view
+they move **that track alone**, leaving every other track exactly where it was. From the
+tracks view, with nothing open, they transpose the **whole project** together. Same gesture,
+scoped to whatever is in front of you — and it agrees with Shift+jog, which already means
+"transpose this track" inside an edit.
+
+**Project-wide**, one semitone per press, up to ±24. It is
 an offset laid over every track, so the relative tuning between tracks is preserved and
 returning to zero restores every original pitch exactly. The giant readout shows the amount
 with its sign while you move it, and a `+5st` marker stays on the status line for as long as

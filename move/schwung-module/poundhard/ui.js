@@ -2177,6 +2177,19 @@ globalThis.onMidiMessageInternal = function (data) {
          * original pitches exactly. Nothing in any pattern is rewritten. */
         if ((d1 === MoveUp || d1 === MoveDown) && d2 > 0) {
             const dir = (d1 === MoveUp) ? 1 : -1;
+            /* THE CURSOR KEYS TRANSPOSE WHAT YOU ARE LOOKING AT. With a track open they move
+             * that track alone and leave every other one where it was; from the tracks view,
+             * with nothing open, they move the whole project together. Same gesture, scoped
+             * to the thing in front of you — which is also what Shift+jog already means
+             * inside an edit, so the two agree rather than offering two ideas of transpose. */
+            if (editTrack >= 0) {
+                const tt = editTrack;
+                trackTrans[tt] = clampi(trackTrans[tt] + dir, -24, 24);
+                knobShow = 'trans';
+                sendCmd('transpose', tt, { p: { track: tt, d: dir } });
+                screenDirty = true;
+                return;
+            }
             sendCmd('transposeall', dir, { p: { d: dir } });
             xposeUntil = phase + 55; screenDirty = true;
             return;
