@@ -1627,6 +1627,22 @@ recognisable, which is the point.
 
 ### Churn
 
+**The CDP process library.** Churn draws from **26 processes across six families** — spectral
+(blur, scatter, average, time-stretch), waveset (repeat, multiply, reverse, average,
+telescope, interpolate, divide, pitch-warp, omit, envelope, delete, fractal), grain
+(time-warp, duplicate, reverse), filter (low-pass and high-pass), time/pitch (varispeed,
+brassage, radical) and resonant (reverb-echo, pitched delay, bounce). A chain takes one or
+two stages, the second always from a *different* family.
+
+> It was eleven processes in four families, and one of those families held a single
+> process — `bounce`, whose decaying repeats are the bubble-burst character that came to
+> dominate simply by being a quarter of every draw. Two of the new families matter most:
+> **filter** was missing entirely, so nothing ever shaped the spectrum and every ornament
+> arrived with the same broadband colour; and **grain** edits at a different scale from
+> waveset, which is where the structural variety comes from. Measured over 36 ornaments from
+> an identical source, mean pairwise timbral distance rose from 1.79 to 2.11 and the
+> furthest-apart pair from 3.71 to 5.49 — the palette reaches considerably further.
+
 The fourth temporary modifier. Churn records short fragments of the **master output**,
 transforms them with **CDP** (the Composers Desktop Project), and drops the results back
 into the performance where there is room — so the piece is continuously ornamented with

@@ -141,7 +141,9 @@ def _s_stretch(j, src, out):
         and _synth(j, b, out)
 
 
-# WAVESET — CDP's signature destructive mangles. The rhythmic-noise end.
+# WAVESET — CDP's signature destructive mangles, operating on individual wavecycles. This is
+# the deepest vein in the whole toolkit and Churn was drawing four buckets from it; `distort`
+# alone offers twenty-odd modes and they do genuinely different things to a fragment.
 def _w_repeat(j, src, out):
     return j.run("distort", "repeat", src, out, j.rng.randint(2, 8), out=out) and _ok(out)
 
@@ -158,9 +160,78 @@ def _w_average(j, src, out):
     return j.run("distort", "average", src, out, j.rng.randint(2, 12), out=out) and _ok(out)
 
 
+def _w_telescope(j, src, out):
+    # collapses N wavecycles into one: a hard time-contraction that raises pitch and
+    # thins the body — nothing else here does this
+    return j.run("distort", "telescope", src, out, j.rng.randint(2, 12), out=out) and _ok(out)
+
+
+def _w_interpolate(j, src, out):
+    return j.run("distort", "interpolate", src, out, j.rng.randint(2, 8), out=out) and _ok(out)
+
+
+def _w_divide(j, src, out):
+    # subharmonics: divides the wavecycle frequency, so the fragment gains an octave-down
+    # growl it never had
+    return j.run("distort", "divide", src, out, j.rng.randint(2, 5), out=out) and _ok(out)
+
+
+def _w_pitch(j, src, out):
+    return j.run("distort", "pitch", src, out, j.rng.randint(1, 4), out=out) and _ok(out)
+
+
+def _w_omit(j, src, out):
+    a = j.rng.randint(1, 3)
+    return j.run("distort", "omit", src, out, a, a + j.rng.randint(1, 4), out=out) and _ok(out)
+
+
+def _w_envel(j, src, out):
+    return j.run("distort", "envel", "1", src, out, j.rng.randint(4, 24), out=out) and _ok(out)
+
+
+def _w_delete(j, src, out):
+    return j.run("distort", "delete", "1", src, out, j.rng.randint(2, 6), out=out) and _ok(out)
+
+
+def _w_fractal(j, src, out):
+    # miniature copies of each wavecycle superimposed on itself — grainy and metallic.
+    # `scaling` must be an INTEGER; a fractional one is rejected as INCORRECT USE.
+    return j.run("distort", "fractal", src, out, j.rng.randint(2, 5),
+                 round(j.rng.uniform(0.3, 0.8), 2), out=out) and _ok(out)
+
+
+# GRAIN — restructures the fragment at grain level rather than wavecycle level. A different
+# scale of edit entirely, and the family Churn was missing.
+def _g_timewarp(j, src, out):
+    return j.run("grain", "timewarp", src, out, round(j.rng.uniform(0.4, 3.0), 3),
+                 out=out) and _ok(out)
+
+
+def _g_duplicate(j, src, out):
+    return j.run("grain", "duplicate", src, out, j.rng.randint(2, 5), out=out) and _ok(out)
+
+
+def _g_reverse(j, src, out):
+    return j.run("grain", "reverse", src, out, out=out) and _ok(out)
+
+
+# FILTER — the tonal family, and the one whose absence was most audible. Everything else
+# here rearranges or damages; nothing shaped the SPECTRUM in a way you would call a filter,
+# so every ornament arrived with the same broadband colour.
+def _f_lohi(j, src, out):
+    # attenuation is NEGATIVE dB (0 to -96); a positive number is rejected outright.
+    # stop-band above pass-band is a lowpass, below it is a highpass — one program, two
+    # opposite characters.
+    lo = j.rng.choice([True, False])
+    a, b = (j.rng.randint(400, 1400), j.rng.randint(2000, 6000)) if lo else \
+           (j.rng.randint(1500, 5000), j.rng.randint(200, 900))
+    return j.run("filter", "lohi", "1", src, out, -j.rng.randint(24, 72), a, b,
+                 out=out) and _ok(out)
+
+
 # TIME / PITCH — varispeed and brassage. Keeps a recognisable relation to the source.
 def _t_speed(j, src, out):
-    # away from 1.0 in either direction, but never so far the fragment stops being material
+    # away from 1.0 in either direction, but never so far the fragment stops being material.
     # The downward end is deliberately shallower than the upward one. Slowing a fragment
     # that contains a kick drags an already low, already loud transient lower and longer,
     # which is the farting blob rather than an ornament.
@@ -170,6 +241,30 @@ def _t_speed(j, src, out):
 
 def _t_brassage(j, src, out):
     return j.run("modify", "brassage", "1", src, out, j.rng.randint(-8, 8), out=out) and _ok(out)
+
+
+def _t_radical(j, src, out):
+    if j.rng.random() < 0.5:
+        return j.run("modify", "radical", "1", src, out, out=out) and _ok(out)
+    return j.run("modify", "radical", "2", src, out, j.rng.randint(2, 6),
+                 round(j.rng.uniform(0.04, 0.25), 3), out=out) and _ok(out)
+
+
+# RESONANT / DELAY — the fragment gains a space and a pitch of its own.
+def _r_revecho(j, src, out):
+    return j.run("modify", "revecho", "1", src, out,
+                 round(j.rng.uniform(0.02, 0.18), 3),
+                 round(j.rng.uniform(0.3, 0.8), 2),
+                 round(j.rng.uniform(0.2, 0.7), 2),
+                 round(j.rng.uniform(0.8, 2.2), 2), out=out) and _ok(out)
+
+
+def _r_newdelay(j, src, out):
+    # a delay short enough to resonate: the midi pitch sets the delay time, so the ornament
+    # comes back with a pitch that was never in the source
+    return j.run("newdelay", "newdelay", src, out, j.rng.randint(28, 76),
+                 round(j.rng.uniform(0.4, 0.9), 2),
+                 round(j.rng.uniform(0.3, 0.8), 2), out=out) and _ok(out)
 
 
 # GRANULAR / RHYTHM — restructures the fragment in time.
@@ -183,11 +278,18 @@ def _r_bounce(j, src, out):
                  round(j.rng.uniform(0.7, 1.6), 3), out=out) and _ok(out)
 
 
+# SIX families, 28 processes. It was four families and eleven, and one of those families held
+# a single process — `bounce`, whose decaying repeats are the "bubble burst" that came to
+# dominate the modifier's character simply by being a quarter of every draw.
 FAMILIES: dict[str, list] = {
     "spectral": [_s_blur, _s_scatter, _s_avrg, _s_stretch],
-    "waveset":  [_w_repeat, _w_multiply, _w_reverse, _w_average],
-    "timepitch": [_t_speed, _t_brassage],
-    "granular": [_r_bounce],
+    "waveset":  [_w_repeat, _w_multiply, _w_reverse, _w_average, _w_telescope,
+                 _w_interpolate, _w_divide, _w_pitch, _w_omit, _w_envel, _w_delete,
+                 _w_fractal],
+    "grain":    [_g_timewarp, _g_duplicate, _g_reverse],
+    "filter":   [_f_lohi],
+    "timepitch": [_t_speed, _t_brassage, _t_radical],
+    "resonant": [_r_revecho, _r_newdelay, _r_bounce],
 }
 
 
