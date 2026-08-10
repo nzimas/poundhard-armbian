@@ -76,6 +76,12 @@
 // what each insert's \enable is set to right now (avoids re-sending the same value
 // every hit) and which FX a track needs instantiated because SOME step locks it.
 ~fxEnable = Array.fill(~nTracks, { Array.fill(8, { 0 }) });
+// PER-STEP FX AMOUNT. -1 means "this step says nothing, use the effect's global wet".
+// ~fxWetNow mirrors ~fxEnable: what each instance is actually set to, so a hit only sends a
+// value when it CHANGES — at sixteenth notes across sixteen tracks that guard is the
+// difference between a few messages a bar and a few hundred.
+~stepFxAmt = Array.fill(~nTracks, { Array.fill(~maxSteps, { Array.fill(8, { -1 }) }) });
+~fxWetNow  = Array.fill(~nTracks, { Array.fill(8, { -1 }) });
 ~stepFxNeed = { |t|                             // OR of every step lock on this track
 	var need = 0;
 	~maxSteps.do { |c| ((~stepFx[t][c] ? -1) > 0).if { need = need | ~stepFx[t][c] } };
@@ -482,6 +488,15 @@
 			};
 			8.do { |k|
 				var want = (lock >= 0).if({ (lock >> k) & 1 }, { ~assigned[t][k] });
+				// PER-STEP AMOUNT, applied to THIS track's own instance of the effect.
+				// The inserts are per-track, so a step's wet cannot bleed onto any other
+				// track — which is what makes a per-step amount honest rather than a
+				// global control wearing a per-step gesture.
+				var amt = ((~stepFxAmt[t][step] ? [])[k] ? -1);
+				var wet = (amt >= 0).if({ amt }, { (~fxStore[k][\wet] ? 0.5) });
+				((~fxWetNow[t][k] != wet) and: { ~fxSynth[t][k].notNil }).if {
+					~fxSynth[t][k].set(\wet, wet); ~fxWetNow[t][k] = wet;
+				};
 				((~fxEnable[t][k] != want) and: { ~fxSynth[t][k].notNil }).if {
 					~fxSynth[t][k].set(\enable, want); ~fxEnable[t][k] = want;
 				};
@@ -874,6 +889,10 @@
 		var k = m[1].asInteger.clip(0, 7), name = m[2].asSymbol, v = m[3].asFloat;
 		~fxStore[k][name] = v;                       // applies to every instance of this fx type
 		~nTracks.do { |t| ~fxSynth[t][k].notNil.if { ~fxSynth[t][k].set(name, v) } };
+		// The wet cache now describes reality again. Without this, a step whose amount
+		// happens to equal the OLD global would decline to re-send and the global change
+		// would silently not reach that track.
+		(name == \wet).if { ~nTracks.do { |t| ~fxWetNow[t][k] = v } };
 	}, '/ph/fxset'),
 	OSCdef(\phSteplock, { |m|
 		var t = m[1].asInteger.clip(0, ~nTracks - 1);
@@ -929,6 +948,12 @@
 		// no longer appears anywhere can go away again)
 		(~stepFxNeed.(t) != before).if { ~rebuildFx.(t) };
 	}, '/ph/stepfx'),
+	OSCdef(\phStepFxAmt, { |m|                      // per-step wet for one effect on one step
+		var t = m[1].asInteger.clip(0, ~nTracks - 1);
+		var c = m[2].asInteger.clip(0, ~maxSteps - 1);
+		var k = m[3].asInteger.clip(0, 7);
+		~stepFxAmt[t][c][k] = m[4].asFloat;          // negative = clear the override
+	}, '/ph/stepfxamt'),
 	OSCdef(\phStepSend, { |m|                       // per-step living-FX send flag (0/1)
 		var t = m[1].asInteger.clip(0, ~nTracks - 1);
 		var c = m[2].asInteger.clip(0, ~maxSteps - 1);
@@ -966,6 +991,7 @@
 			~stepMacro[t][c] = nil; ~stepRatchet[t][c] = 1; ~stepSend[t][c] = 0;
 			~stepStart[t][c] = nil; ~stepEnd[t][c] = nil; ~stepCycle[t][c] = 1;
 			~stepFilt[t][c] = nil; ~stepFx[t][c] = -1; ~stepFxCycle[t][c] = 1;
+			8.do { |k| ~stepFxAmt[t][c][k] = -1 };
 		};
 		~rebuildFx.(t);                             // the per-step FX locks just went away
 	}, '/ph/clearlocks'),

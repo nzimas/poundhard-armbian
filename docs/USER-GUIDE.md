@@ -1010,6 +1010,22 @@ carries it; tapping it turns it **on everywhere** if it was missing anywhere, el
 everywhere**, so mixed selections resolve predictably. Releasing Shift clears the
 selection. Steps that carry FX stay marked in **dark red**.
 
+**Hold a step that carries effects and turn the knob above that effect's pad** to set how
+**wet** that effect is *on that step*. Knob 1 is the pad-1 effect, knob 8 the pad-8 one —
+the knob sits directly above the pad it controls. The readout names it (`CRSH STEP 62`) so
+you always know which of the eight you are moving.
+
+This is a real per-step value, not a global control reached from a step: the effects are
+per-track inserts, so a step's wet is applied to that track's own instance of the effect and
+cannot bleed onto any other track. A step with no override simply uses the effect's global
+dry/wet, so the first detent nudges from what you are already hearing rather than jumping.
+Overrides are stored sparsely and travel with the pattern.
+
+The mapping is scoped to the effects the step actually carries, so knobs 1–3 keep meaning
+velocity, pan and macro on every step that does not use those three effects — a knob that
+silently changed meaning depending on invisible state would be worse than not having the
+gesture at all.
+
 **The effects need not fire every time the step does.** Hold a step that carries FX and
 row 4 becomes its **effect interval**, counted in plays of that step — the same row, the
 same gesture and the same meaning as a living step's transform interval. Row 3 says how

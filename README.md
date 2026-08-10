@@ -261,7 +261,7 @@ PYTHONPATH="$PWD:$PWD/vendor" python3 -m poundhard.headless
 **The controller is authoritative** for musical state (a `Project`: 16 tracks ×
 {engine type, note, velocity, parameters, pattern + per-step locks — pitch, velocity,
 pan, voice macro, ratchet, living flag/period, FX mask, **cycle divider**, the **per-step
-sample window** and the **per-step filter** — mute, length, rate, **filter**}, plus FX assignment/bypass/macros, tempo, and the pattern bank — 16 seeds, each with a
+sample window**, the **per-step FX amount** and the **per-step filter** — mute, length, rate, **filter**}, plus FX assignment/bypass/macros, tempo, and the pattern bank — 16 seeds, each with a
 lazily-allocated row of 16 expansions). A track
 is at most **16 steps**; the per-step arrays are 32 wide for headroom and for projects
 saved before the cap. It reads `control.json`, writes `status.json`, generates kits,
@@ -356,7 +356,7 @@ command is dispatched until the engine reports ready.
 |---|---|
 | engine palette | `audition`, `palettegen`, `assign`, `randtrack`, `genkit`, `drumaudition` / `drummode` (DRUM type picker), `smparm` (arm the SAMPLE capture) |
 | tracks | `mute`, `solo`, `trackset` (pitch/amp/pan/rate), `voicemacro`, `voiceparam` (one named voice param — SAMPLE's window knobs), `trackfilter` (cutoff/res/type), `note`, `setlen`, `clearpat` |
-| steps | `stepset` / `steptoggle`, `steplock`, `stepmacro`, `stepfx` (per-step FX mask), `stepcycle` (fire every Nth repetition), `stepwindow` (per-step sample slice), `stepfilter` (per-step filter lock), `marklive` / `liveperiod` (living steps — the period is in PLAYS of the step, 1-8) |
+| steps | `stepset` / `steptoggle`, `steplock`, `stepmacro`, `stepfx` (per-step FX mask), `stepfxamt` (per-step FX wet), `stepcycle` (fire every Nth repetition), `stepwindow` (per-step sample slice), `stepfilter` (per-step filter lock), `marklive` / `liveperiod` (living steps — the period is in PLAYS of the step, 1-8) |
 | clipboard | `stepcopy` / `steppaste`, `rowcopy` / `rowpaste`, `trackcopy` (the Copy-button gestures) |
 | generation | `stepgen` (a new sequence for one track, scale-aware), `joltpad` / `joltbreak` / `joltinit` / `joltauto` / `joltrate` / `joltmut` (JOLT's break variations, automation and continuous mutation) |
 | performance | `heat`, `shuffle`, `quake`, `churn`, `break` + `breakint`, `strobe`, `whim` (the seven temporary overlays) |

@@ -357,6 +357,7 @@ let smpState = 'idle', smpSrc = -1, smpChain = [];
 let smpHold = false;
 let stepSel = [];            /* steps selected under Shift (per-step FX editing) */
 let editFx = new Array(N_STEPS).fill(-1);
+let editFxAmt = [];        /* per step: { "<fx>": wet } overrides, from status */
 let editCycle = new Array(N_STEPS).fill(1);   /* fire every Nth pattern repetition */   /* per-step FX mask mirrored from status */
 let lenArm = false;          /* Shift + master-knob touch: next pad sets the pattern LENGTH */
 const SAMPLE_CELL = 18;
@@ -889,6 +890,16 @@ function drawChaosBig() {
 }
 function drawStepParam() {
     var c = stepEditCell;
+    if (knobShow && knobShow.indexOf('sfxa') === 0) {
+        /* NAME THE EFFECT. The whole point of the gesture is knowing which of the eight you
+         * are moving, and eight identical percentages would defeat it. */
+        var fk = parseInt(knobShow.slice(4), 10);
+        var row = editFxAmt[c] || {};
+        var av = (row[String(fk)] == null) ? fxWet[fk] : row[String(fk)];
+        drawParamBig((fxNames[fk] || ('FX' + (fk + 1))) + ' STEP', '' + Math.round(av * 100),
+                     'uni', clampf(av, 0, 1));
+        return;
+    }
     if (knobShow === 'pitch') drawParamBig('STEP PITCH', noteName(stepNote[c]), null, 0);
     else if (knobShow === 'vel') drawParamBig('STEP VELOCITY', '' + velMidi(stepVel[c]), 'uni', clampf(stepVel[c] / 2, 0, 1));
     else if (knobShow === 'pan') drawParamBig('STEP PAN', panLbl(stepPan[c]), 'bi', clampf(stepPan[c], -1, 1));
@@ -1312,6 +1323,7 @@ function readStatus() {
         if (s.edit.stepMacro) stepMacro = s.edit.stepMacro;
         if (s.edit.living) editLiving = s.edit.living;
         if (s.edit.fx) editFx = s.edit.fx;
+        if (s.edit.fxamt) editFxAmt = s.edit.fxamt;
         if (s.edit.cycle) editCycle = s.edit.cycle;
         if (s.edit.stepFcut) stepFcut = s.edit.stepFcut;
         if (s.edit.stepFres) stepFres = s.edit.stepFres;
@@ -1365,7 +1377,7 @@ globalThis.init = function () {
     editSteps = new Array(N_STEPS).fill(0); editName = ''; editType = '';
     editLiving = new Array(N_STEPS).fill(false); editPeriod = new Array(N_STEPS).fill(4); recHeld = false;
     editFxCycle = new Array(N_STEPS).fill(1);
-    editFx = new Array(N_STEPS).fill(-1); editCycle = new Array(N_STEPS).fill(1);
+    editFx = new Array(N_STEPS).fill(-1); editCycle = new Array(N_STEPS).fill(1); editFxAmt = [];
     stepSel = []; lenArm = false;
     stepNote = new Array(N_STEPS).fill(60); stepVel = new Array(N_STEPS).fill(1.0); stepPan = new Array(N_STEPS).fill(0.0);
     shiftHeld = false; masterTouched = false; seq = 0; cmdQueue = [];
@@ -2407,6 +2419,31 @@ globalThis.onMidiMessageInternal = function (data) {
                     knobShow = 'sftype';
                     sendCmd('stepfilter', c, { p: { track: editTrack, cell: c, type: stepFtype[c] } });
                     screenDirty = true; return;
+                }
+            }
+            /* HOLD A STEP THAT CARRIES EFFECTS -> the knob above each effect's pad sets how
+             * WET that effect is ON THAT STEP. Knob 1 is the pad-1 effect, knob 8 the pad-8
+             * one, matching the bottom row underneath them.
+             *
+             * Scoped to the effects the step actually carries, so knobs 1-3 keep meaning
+             * velocity, pan and macro on every step that does not use those three effects.
+             * A knob that silently changed meaning depending on invisible state would be
+             * worse than not having the gesture. */
+            if (stepEditCell >= 0 && editTrack >= 0) {
+                const c = stepEditCell;
+                const mask = editFx[c] < 0 ? 0 : editFx[c];
+                if ((mask >> ki) & 1) {
+                    const key = String(ki);
+                    const row = editFxAmt[c] || {};
+                    /* start from the effect's global wet: that is what this step sounds like
+                     * right now, so the first detent nudges rather than jumps */
+                    let v = (row[key] == null) ? fxWet[ki] : row[key];
+                    v = clampf(v + dn * KNOB_STEP, 0, 1);
+                    if (!editFxAmt[c]) editFxAmt[c] = {};
+                    editFxAmt[c][key] = v;                       /* optimistic */
+                    sendCmd('stepfxamt', c, { p: { track: editTrack, cell: c, fx: ki, amt: v } });
+                    knobShow = 'sfxa' + ki; screenDirty = true;
+                    return;
                 }
             }
             if (stepEditCell >= 0 && ki <= 2) {                  /* step lock: k1 vel, k2 pan, k3 macro */

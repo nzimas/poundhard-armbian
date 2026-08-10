@@ -163,6 +163,8 @@ class EngineBridge:
     def vel(self, t, v):               self.send("/ph/vel", int(t), float(v))
     def samp(self, t, idx):            self.send("/ph/samp", int(t), int(idx))
     # --- SAMPLE engine (capture -> mangle -> audition -> assign) ---
+    def stepfxamt(self, t, cell, fx, amt):
+        self.send("/ph/stepfxamt", int(t), int(cell), int(fx), float(amt))
     def stepfx(self, t, cell, mask):   self.send("/ph/stepfx", int(t), int(cell), int(mask))
     def stepcycle(self, t, cell, n):   self.send("/ph/stepcycle", int(t), int(cell), int(n))
     def stepsmp(self, t, cell, start, end):     # per-step SAMPLE window (-1 = inherit)

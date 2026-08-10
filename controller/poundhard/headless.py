@@ -301,6 +301,12 @@ class Controller:
                     or tr.step_pan[cell] is not None):
                 self.bridge.steplock(t, cell, tr.eff_note(cell), tr.eff_vel(cell), tr.eff_pan(cell))
             self.bridge.stepfx(t, cell, tr.step_fx[cell])
+            # per-step FX amounts are SPARSE: only the overrides are sent, and a step with
+            # none is left on the effect's global wet. Pushing a full 16x8 grid here would
+            # be 128 messages per track on every pattern load for values that are almost
+            # all default.
+            for k, v in (tr.step_fxamt[cell] or {}).items():
+                self.bridge.stepfxamt(t, cell, int(k), float(v))
             self.bridge.stepfxcycle(t, cell, tr.step_fxcycle[cell])
             self.bridge.stepcycle(t, cell, tr.step_cycle[cell])
             self.bridge.stepsmp(t, cell,
@@ -1593,6 +1599,13 @@ class Controller:
                                          st.tracks[t].eff_vel(cell), st.tracks[t].eff_pan(cell))
                     self.bridge.stepmacro(t, cell, [])
                     self.bridge.stepratchet(t, cell, 1)
+        elif cmd == "stepfxamt":               # hold a step carrying FX + knob N = its amount
+            t = int(p.get("track", st.edit_track))
+            cell = int(p.get("cell", -1))
+            fx = int(p.get("fx", -1))
+            if 0 <= t < N_TRACKS and 0 <= cell < N_STEPS and 0 <= fx < N_FX:
+                v = st.set_step_fx_amount(t, cell, fx, float(p.get("amt", 0.5)))
+                self.bridge.stepfxamt(t, cell, fx, v)
         elif cmd == "stepfxcycle":             # row 4 on a held step WITH fx: how often it goes wet
             t = int(p.get("track", st.edit_track))
             cell = int(p.get("cell", -1))
@@ -2245,6 +2258,7 @@ class Controller:
                 # and which are firing (transformed) this cycle (transient model)
                 "living": list(et.step_living),
                 "fx": list(et.step_fx),        # per-step FX mask (-1 = no lock)
+                "fxamt": [dict(d) for d in et.step_fxamt],   # per-step FX wet overrides
                 "fxCycle": list(et.step_fxcycle),  # how often that mask is applied, in plays
 
                 "cycle": list(et.step_cycle),  # fire every Nth pattern repetition

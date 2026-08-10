@@ -142,6 +142,12 @@ class Track:
     # step — so it multiplies with step_cycle exactly like a living step's period does.
     # 1 = every play. A step can therefore play dry most times and wet occasionally.
     step_fxcycle: list = field(default_factory=lambda: [1] * N_STEPS)
+    # PER-STEP FX AMOUNT. One sparse map per step: {"<fx index>": wet}. Sparse and
+    # string-keyed on purpose — a dense 16x8 grid would add ~10 KB to every pattern snapshot
+    # for values that are almost all default, and JSON turns integer keys into strings
+    # anyway, so storing them that way keeps a saved project byte-identical to what was
+    # written. A step with no entry for an effect uses that effect's global wet.
+    step_fxamt: list = field(default_factory=lambda: [dict() for _ in range(N_STEPS)])
     # CYCLE FREQUENCY: how often a step is allowed to fire, in pattern repetitions.
     # 1 = every cycle (the default), 4 = once every four times the pattern comes round.
     # It is what lets a 16-step pattern evolve over a much longer span than 16 steps.
@@ -209,6 +215,7 @@ class Track:
                 "step_ratchet": list(self.step_ratchet), "step_send": list(self.step_send),
                 "step_fx": list(self.step_fx),
                 "step_fxcycle": list(self.step_fxcycle),
+                "step_fxamt": [dict(d) for d in self.step_fxamt],
                 "step_cycle": list(self.step_cycle),
                 "step_start": list(self.step_start),
                 "step_filt": [None if v is None else list(v) for v in self.step_filt],
@@ -241,6 +248,9 @@ class Track:
         t.step_ratchet = ([int(x) for x in d.get("step_ratchet", [])][:N_STEPS] + [1] * N_STEPS)[:N_STEPS]
         t.step_send = ([int(x) for x in d.get("step_send", [])][:N_STEPS] + [0] * N_STEPS)[:N_STEPS]
         t.step_fx = ([int(x) for x in d.get("step_fx", [])][:N_STEPS] + [-1] * N_STEPS)[:N_STEPS]
+        amt = list(d.get("step_fxamt") or [])[:N_STEPS]
+        t.step_fxamt = [dict(x) if isinstance(x, dict) else {} for x in amt] \
+            + [dict() for _ in range(max(0, N_STEPS - len(amt)))]
         t.step_fxcycle = ([max(1, min(8, int(x))) for x in d.get("step_fxcycle", [])][:N_STEPS]
                           + [1] * N_STEPS)[:N_STEPS]
         t.step_cycle = ([max(1, min(8, int(x))) for x in d.get("step_cycle", [])][:N_STEPS]
@@ -1391,6 +1401,17 @@ class Project:
             tr.rate = float(max(0.0625, min(8.0, value)))
             return ("rate", tr.rate)
         return ("", 0.0)
+
+    def set_step_fx_amount(self, track: int, cell: int, fx: int, amt: float) -> float:
+        """How wet effect `fx` is on this one step. Stored only when it differs from the
+        effect's global wet, so a pattern carries overrides rather than a full grid."""
+        tr = self.tracks[track]
+        v = max(0.0, min(1.0, float(amt)))
+        tr.step_fxamt[cell][str(int(fx))] = round(v, 4)
+        return v
+
+    def step_fx_amount(self, track: int, cell: int, fx: int, default: float = 0.5) -> float:
+        return float(self.tracks[track].step_fxamt[cell].get(str(int(fx)), default))
 
     def set_step_param(self, track: int, cell: int, param: str, value: float) -> tuple:
         """Set a per-step lock (pitch/vel/pan). Returns effective (note, vel, pan)."""
