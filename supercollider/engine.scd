@@ -342,6 +342,23 @@
 ~joltSlices = Array.fill(16, { 16 });
 ~joltProg  = Array.fill(16, { Array.fill(16, { [0, 1.0, 0, 1.0, 0, 0, 1.0, 1] }) });
 ~joltStretch = Array.fill(16, { 1.0 });
+// Which file each Jolt track currently holds, so re-sending the same break is a no-op
+// rather than another allocate-and-free cycle under the audio thread.
+~joltPath = Array.newClear(16);
+// RETIRING A BREAK BUFFER, NEVER FREEING IT OUTRIGHT.
+//
+// Freeing a buffer while a PlayBuf is still reading it hands the DSP thread memory that has
+// been unmapped or handed to something else. On this RT kernel that surfaces as a page fault
+// INSIDE the audio callback, which blocks on an RT spinlock in the memory manager, stalls
+// RCU for seconds and gets supernova evicted by JACK — 48 xruns and "exited with exit code
+// 0". It is not a crash you can see coming from the sclang side, because nothing there is
+// wrong; the fault is in the callback that is still reading.
+//
+// A Jolt slice is at most one bar and its envelope releases in milliseconds, so three
+// seconds is comfortably longer than anything that can still be sounding.
+~retireBuf = { |b|
+	b.notNil.if { SystemClock.sched(3.0, { b.free; nil }) };
+};
 ~csAddr  = NetAddr("127.0.0.1", 11000);        // Csound's UDP server (--port=11000)
 ~csVoice = Array.fill(~nTracks, { nil });
 // what the carrier was last told, so a hit that changes nothing sets nothing
@@ -703,7 +720,7 @@
 		Buffer.readChannel(s, path, channels: [0], action: { |b|
 			var old = ~sampBuf[t];
 			~sampBuf[t] = b;
-			old.notNil.if { old.free };
+			~retireBuf.(old);            // a PlayBuf may still be reading the old one
 		});
 	};
 };
@@ -716,7 +733,7 @@
 			var slot = (osc == 2).if({ ~wtBuf2 }, { ~wtBuf1 });
 			var old = slot[t];
 			slot[t] = b;
-			old.notNil.if { old.free };
+			~retireBuf.(old);            // a BufRd may still be reading the old sprite
 		});
 	};
 };
@@ -727,7 +744,7 @@
 		Buffer.readChannel(s, ~wtSprites[i], channels: [0], action: { |b|
 			var old = ~wtBufPrev[osc];
 			~wtBufPrev[osc] = b;
-			old.notNil.if { old.free };
+			~retireBuf.(old);            // a BufRd may still be reading the old sprite
 		});
 	};
 };
@@ -1018,11 +1035,16 @@
 	// STRETCH is computed by the controller from the pattern tempo — the engine just plays it.
 	OSCdef(\phJoltLoad, { |m|
 		var t = m[1].asInteger, path = m[2].asString, slices = m[3].asInteger;
-		(t >= 0).if {
+		// Same file already loaded? Do nothing. The controller re-pushes a track's break
+		// whenever it pushes anything about it, and re-reading a half-megabyte FLAC to arrive
+		// at the buffer that is already there is pure risk for no gain.
+		((t >= 0) and: { ~joltPath[t] != path }).if {
+			~joltPath[t] = path;
 			Buffer.read(s, path, action: { |b|
-				~joltBuf[t].notNil.if { ~joltBuf[t].free };
+				var old = ~joltBuf[t];
 				~joltBuf[t] = b;
 				~joltSlices[t] = slices.max(1);
+				~retireBuf.(old);         // the outgoing buffer may still be sounding
 			});
 		};
 	}, '/ph/joltload'),
@@ -1133,7 +1155,7 @@
 			Buffer.readChannel(s, path, channels: [0], action: { |b|
 				var old = ~smpPad;
 				~smpPad = b;
-				old.notNil.if { old.free };
+				~retireBuf.(old);        // may still be sounding — never free under a reader
 				~ctrl.sendMsg("/ph/micready", b.duration);
 			});
 		}, { ~ctrl.sendMsg("/ph/micready", 0.0) });
@@ -1200,7 +1222,7 @@
 			Buffer.readChannel(s, path, channels: [0], action: { |b|
 				var old = ~churnBuf[slot];
 				~churnBuf[slot] = b;
-				old.notNil.if { old.free };
+				~retireBuf.(old);        // may still be sounding — never free under a reader
 				~ctrl.sendMsg("/ph/churnloaded", slot, b.numFrames / s.sampleRate);
 			});
 		}, { ~ctrl.sendMsg("/ph/churnloaded", slot, 0) });
@@ -1321,7 +1343,7 @@
 	OSCdef(\phSmpLoad, { |m|
 		var path = m[1].asString;
 		Buffer.readChannel(s, path, channels: [0], action: { |b|
-			var old = ~smpPad; ~smpPad = b; old.notNil.if { old.free };
+			var old = ~smpPad; ~smpPad = b; ~retireBuf.(old);        // may still be sounding — never free under a reader
 			~ctrl.sendMsg("/ph/smpready", b.numFrames / s.sampleRate);
 		});
 	}, '/ph/smpload'),
@@ -1338,7 +1360,7 @@
 			Buffer.readChannel(s, path, channels: [0], action: { |b|
 				var old = ~smpBuf[t];
 				~smpBuf[t] = b;
-				old.notNil.if { old.free };
+				~retireBuf.(old);        // may still be sounding — never free under a reader
 			});
 		});
 		~smpPad.notNil.if { ~smpPad.free; ~smpPad = nil };   // pad released for the next take
@@ -1360,7 +1382,7 @@
 					s.sync;
 					src.copyData(nb);
 					s.sync;
-					{ var old = ~smpBuf[b]; ~smpBuf[b] = nb; old.notNil.if { old.free } }.value;
+					{ var old = ~smpBuf[b]; ~smpBuf[b] = nb; ~retireBuf.(old) }.value;
 				};
 			}, {
 				~smpBuf[b].notNil.if { ~smpBuf[b].free; ~smpBuf[b] = nil };
