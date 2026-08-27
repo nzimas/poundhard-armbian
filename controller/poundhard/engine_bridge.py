@@ -283,7 +283,10 @@ class EngineBridge:
         if idx < 0:
             return
         params = voice.get("params", {})
-        mode = int(round(params.get("drum.mode", 0)))
+        # The engine's 4th preview arg is the MODE for any multi-mode engine, not just
+        # DRUM: PLUCK uses it to pick pluck vs tube (see ~wguideDefs in engine.scd).
+        # Reading only drum.mode meant a tube-flavoured PLUCK always auditioned as a pluck.
+        mode = int(round(params.get("drum.mode", params.get("pluck.mode", 0))))
         flat: list = []
         for pid, val in params.items():
             flat += [engine_arg(pid), float(val)]

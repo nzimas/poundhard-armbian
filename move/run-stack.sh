@@ -4,6 +4,11 @@
 # we background the launchers so host_system_cmd returns immediately.
 PH=/data/UserData/poundhard
 LOGS=$PH/logs; mkdir -p "$LOGS"
+# Truncate the engine log BEFORE anything starts. The csound guard below waits for
+# "engine ready" to appear in it; a leftover marker from the PREVIOUS session makes
+# that guard pass instantly and starts Csound inside supernova's sample-load storm,
+# where its JACK registration segfaults. This is why Csound never survived a restart.
+: > "$LOGS/engine.log" 2>/dev/null || true
 # IPC dir for control/status/heartbeat (separate from $PH/share = the SC bundle).
 # Real dir on /data (the Schwung host can only read files under /data/UserData, and
 # reads through a tmpfs symlink hang the host — so keep it a plain directory here).
@@ -64,13 +69,28 @@ fi
 # since there is nothing to connect to before that.
 if [ -x "$PH/run-csound.sh" ]; then
     (
+        # Wait for the server PROCESS...
         i=0
         while [ $i -lt 90 ]; do
-            pgrep -x supernova >/dev/null 2>&1 && break
-            pgrep -x scsynth   >/dev/null 2>&1 && break
+            if pgrep -x supernova >/dev/null 2>&1; then break; fi
+            if pgrep -x scsynth   >/dev/null 2>&1; then break; fi
             i=$((i+1)); sleep 1
         done
-        sleep 3                      # let the server finish registering its input ports
+        # ...then for the engine to actually be READY. Waiting only for the process and
+        # sleeping 3s starts Csound in the middle of supernova loading its 500-sample
+        # bank, and Csound's JACK client registration SEGFAULTS under that load - every
+        # retry lands inside the same storm, so engine 20 came up silent on every launch
+        # while starting it by hand later always worked.
+        j=0
+        ready=0
+        while [ $j -lt 120 ]; do
+            if grep -q "engine ready" "$LOGS/engine.log" 2>/dev/null; then ready=1; break; fi
+            j=$((j+1)); sleep 1
+        done
+        if [ "$ready" = 0 ]; then
+            echo "[csound] engine never reported ready after ${j}s - starting anyway"
+        fi
+        sleep 2                      # let the graph settle after the load burst
         sh "$PH/run-csound.sh"
     ) > "$LOGS/csound_start.log" 2>&1 &
 fi

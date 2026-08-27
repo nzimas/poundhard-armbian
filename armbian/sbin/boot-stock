@@ -1,0 +1,20 @@
+#!/usr/bin/env python3
+"""Reboot once into stock AbletonOS.
+
+config.txt boots Armbian; tryboot.txt holds the original stock config. The RPi
+bootloader honours tryboot.txt for exactly one boot, so this is a one-shot
+escape - the next normal power cycle returns to Armbian.
+aarch64 __NR_reboot = 142
+"""
+import ctypes, os, sys
+
+os.sync()
+libc = ctypes.CDLL(None, use_errno=True)
+libc.syscall.argtypes = [ctypes.c_long, ctypes.c_ulong, ctypes.c_ulong,
+                         ctypes.c_ulong, ctypes.c_char_p]
+libc.syscall.restype = ctypes.c_long
+print("rebooting into stock AbletonOS (one boot only)...", flush=True)
+rc = libc.syscall(142, 0xfee1dead, 0x28121969, 0xA1B2C3D4, b"0 tryboot")
+err = ctypes.get_errno()
+print(f"rc={rc} errno={err} ({os.strerror(err) if err else 'ok'})", flush=True)
+sys.exit(0 if rc == 0 else 1)

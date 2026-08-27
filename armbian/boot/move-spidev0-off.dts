@@ -1,0 +1,11 @@
+/dts-v1/;
+/plugin/;
+/ {
+	compatible = "brcm,bcm2711";
+	fragment@0 {
+		target-path = "/soc/spi@7e204000/spidev@0";
+		__overlay__ {
+			status = "disabled";
+		};
+	};
+};

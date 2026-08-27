@@ -19,11 +19,26 @@ export HOME=/data/UserData
 # libraries through the RPATH baked into them (patched at bundle time to $PH/lib).
 export LD_LIBRARY_PATH=$PH/lib:$RNBO/lib
 # The shadow driver comes from Schwung (a hard prerequisite); fall back to RNBO's copy.
-JACK_DRIVER_DIR=/data/UserData/schwung/lib/jack
-[ -d "$JACK_DRIVER_DIR" ] || JACK_DRIVER_DIR=$RNBO/lib/jack
+# Audio backend. "shadow" attaches to a shm segment published by Ableton's
+# stack (so it REQUIRES MoveOriginal running). "move" is the native driver
+# that owns /dev/ablspi0.0 directly - no Ableton needed.
+export PH_JACK_DRIVER="${PH_JACK_DRIVER:-move}"
+
+# The driver dir must actually CONTAIN the requested driver. Schwung ships
+# only jack_shadow.so; jack_move.so lives in the RNBO tree.
+if [ "$PH_JACK_DRIVER" = move ]; then
+    JACK_DRIVER_DIR=$RNBO/lib/jack
+else
+    JACK_DRIVER_DIR=/data/UserData/schwung/lib/jack
+    [ -d "$JACK_DRIVER_DIR" ] || JACK_DRIVER_DIR=$RNBO/lib/jack
+fi
+if [ ! -f "$JACK_DRIVER_DIR/jack_$PH_JACK_DRIVER.so" ]; then
+    echo "[engine] FATAL: jack_$PH_JACK_DRIVER.so not in $JACK_DRIVER_DIR" >&2
+    exit 1
+fi
 export JACK_DRIVER_DIR
 export JACK_NO_AUDIO_RESERVATION=1
-export SC_JACK_DEFAULT_OUTPUTS=system          # scsynth out -> shadow playback
+export SC_JACK_DEFAULT_OUTPUTS="${PH_JACK_PORTS:-system}"          # scsynth out -> shadow playback
 # ...AND THE INPUTS, which were never connected. The server was booted with 36 inputs and the
 # first two documented as "microphone", but documentation is not a patch cable: JACK input
 # ports read silence until something is connected to them, and nothing ever was. Csound only
@@ -31,7 +46,7 @@ export SC_JACK_DEFAULT_OUTPUTS=system          # scsynth out -> shadow playback
 # The shadow driver does provide system:capture_N (it is in the binary), so naming the client
 # here makes SuperCollider's JACK driver connect input 1-2 to it at boot. Inputs beyond the
 # two capture ports simply find nothing to connect to, which is harmless.
-export SC_JACK_DEFAULT_INPUTS=system           # shadow capture (the built-in mic) -> engine in
+export SC_JACK_DEFAULT_INPUTS="${PH_JACK_PORTS:-system}"           # shadow capture (the built-in mic) -> engine in
 export SC_PLUGIN_PATH=$PH/plugins              # UGen plugins (backup to ph-boot)
 # SERVER: supernova (multicore) when >0, scsynth when 0. ph-boot.scd reads this and
 # picks the binary + thread count. Supernova needs the *_supernova.so plugin set (shipped)
@@ -53,7 +68,7 @@ export PATH=$PH/bin:$PATH
 LOGS=$PH/logs; mkdir -p "$LOGS"
 JACKLOG=$LOGS/jackd.log; ENGLOG=$LOGS/engine.log
 
-echo "[engine] starting jackd -R -d shadow (realtime)"
+echo "[engine] starting jackd -R -d $PH_JACK_DRIVER (realtime)"
 # Realtime audio chain — -R -P70 puts jackd on SCHED_FIFO; libjack then promotes
 # scsynth's audio callback thread to RT too (scsynth has cap_sys_nice). Needs
 # cap_sys_nice+cap_ipc_lock on the jackd binary. Priority 70 stays BELOW the
@@ -62,8 +77,9 @@ echo "[engine] starting jackd -R -d shadow (realtime)"
 # is already RUNNING wins — the shadow JACK is shared with the rest of the box.
 JACKBIN=$PH/bin/jackd
 [ -x "$JACKBIN" ] || JACKBIN=$RNBO/bin/jackd
-pgrep -f "jackd -R" >/dev/null 2>&1 || { "$JACKBIN" -R -P 70 -d shadow > "$JACKLOG" 2>&1 & sleep 2; }
-grep -q "attached to shared memory" "$JACKLOG" 2>/dev/null && echo "[engine] shadow attached"
+pgrep -f "jackd -R" >/dev/null 2>&1 || { "$JACKBIN" -R -P 70 -d "$PH_JACK_DRIVER" > "$JACKLOG" 2>&1 & sleep 2; }
+[ "$PH_JACK_DRIVER" = shadow ] && grep -q "attached to shared memory" "$JACKLOG" 2>/dev/null && echo "[engine] shadow attached"
+[ "$PH_JACK_DRIVER" = move ] && echo "[engine] native move driver (no Ableton)"
 
 echo "[engine] starting sclang (ph-boot.scd) — pinned to cores 0-2"
 taskset 0x7 $PH/bin/sclang -l $PH/share/sclang_conf.yaml $PH/sc/ph-boot.scd \

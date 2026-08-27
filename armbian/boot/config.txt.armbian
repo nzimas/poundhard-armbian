@@ -1,0 +1,17 @@
+# DEFAULT BOOT: Armbian (native move driver, appliance launcher).
+# To return to stock AbletonOS for one boot: /usr/local/sbin/boot-stock
+# Stock boot config is preserved in config.txt.stock-original + tryboot.txt
+# One-shot Armbian boot via the RPi firmware (tryboot).
+# config.txt is NOT modified — a normal power cycle boots stock AbletonOS.
+arm_64bit=1
+enable_uart=1
+over_voltage=4
+kernel=armbian-Image
+device_tree=bcm2711-rpi-cm4-armbian.dtb
+cmdline=armbian-cmdline.txt
+# dtparam=i2c1=on   # REMOVED: claims GPIO2/3 as i2c (alt0); ablspi needs GPIO3
+# dtparam=i2c_arm=on   # REMOVED: claims GPIO2/3 as i2c (alt0); ablspi needs GPIO3
+dtparam=spi=on
+dtoverlay=dwc2,dr_mode=otg
+dtoverlay=ablspi-move-cm4
+dtoverlay=move-spidev0-off

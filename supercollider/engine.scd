@@ -20,6 +20,12 @@
 ~typeDefs = [\phDrum, \phFm7, \phBuchloid, \phMolly, \phRings, \phBen, \phNoizeop, \phIcarus, \phPlaits, \phShaker, \phMembrane, \phMallet, \phBowed, \phPluck, \phTube, \phChaos, \phWtable, \phBytebeat, \phSampleVoice, \phCsound, \phSampleVoice, \phJolt];   // 20 = MIC: same playback voice, mic-captured buffer  // /ph/track type index (-1 = empty/unassigned)
 // DRUM is split into per-mode defs (chosen from the track's `mode` param at spawn).
 ~drumDefs = [\phDrumKick, \phDrumSnare, \phDrumHat, \phDrumMetal, \phDrumClap, \phDrumTom, \phDrumNoise];
+// PLUCK is a MERGED waveguide voice: `mode` picks the model (0 = plucked stiff string,
+// 1 = two-tube) and the matching def is spawned at note time, exactly like DRUM's modes,
+// so the unused model costs nothing. TUBE keeps type 14 in ~typeDefs (unreachable from the
+// palette, like MIC) so projects saved before the merge still load.
+~wguideDefs = [\phPluck, \phTube];
+~pluckType = 13;
 
 ~ctrl = NetAddr(~ctrlHost, ~ctrlPort);
 ~ready = false;
@@ -466,7 +472,9 @@
 		var def, nn, vv, pp, sm, merged, args, syn, lst;
 		def = (typeIdx == 0).if(
 			{ ~drumDefs[(~pstore[t][\mode] ? 0).round.clip(0, 6).asInteger] },   // per-mode drum
-			{ ~typeDefs[typeIdx.clip(0, ~typeDefs.size - 1)] });
+			{ (typeIdx == ~pluckType).if(
+				{ ~wguideDefs[(~pstore[t][\mode] ? 0).round.clip(0, 1).asInteger] },  // pluck | tube
+				{ ~typeDefs[typeIdx.clip(0, ~typeDefs.size - 1)] }) });
 		nn = ~stepNote[t][step] ? ~note[t];
 		vv = (~stepVel[t][step] ? ~vel[t]) * velScale;    // ratchet sub-hits decay in velocity
 		pp = ~stepPan[t][step] ? (~pstore[t][\pan] ? 0);
@@ -775,7 +783,9 @@
 		(typeIdx >= 0).if {
 			var def = (typeIdx == 0).if(
 				{ ~drumDefs[mode.clip(0, 6)] },
-				{ ~typeDefs[typeIdx.clip(0, ~typeDefs.size - 1)] });
+				{ (typeIdx == ~pluckType).if(
+					{ ~wguideDefs[mode.clip(0, 1)] },                 // pluck | tube
+					{ ~typeDefs[typeIdx.clip(0, ~typeDefs.size - 1)] }) });
 			(def == \phCsound).if({
 				// CSOUND audition: nothing spawns — fire the note at Csound on the preview
 				// pair and make sure the carrier voice exists to bring it back in.

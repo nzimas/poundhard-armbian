@@ -698,11 +698,17 @@ BOWED = VoiceSpec(
 # PLUCK — DWG plucked stiff string (sc3-plugins): inharmonic plucks (koto / clav /
 # harp / muted string). Pitched by the note; a noise burst excites the string.
 # --------------------------------------------------------------------------- #
+# PLUCK — merged waveguide voice. `pluck.mode` picks the model and the engine spawns
+# the matching SynthDef (phPluck / phTube) at note time, exactly as DRUM does with its
+# per-mode defs — so the unused model costs nothing. TUBE used to be its own palette
+# entry (pad 15); the two were near-identical waveguides driven by a noise burst.
 PLUCK = VoiceSpec(
     type="PLUCK",
-    role="Digital-waveguide plucked stiff string — koto / clav / harp / muted plucks.",
+    role="Waveguide voice — plucked stiff string (koto/clav/harp/muted) or two-tube (hollow/reedy).",
     synthdef="phPluck",
     params=[
+        P("pluck.mode", "Model", curve=Curve.ENUM, enum=["pluck", "tube"],
+          default=0, randomize=RandomizePolicy.WIDE),
         P("pluck.pos", "Pluck Position", rmin=0.02, rmax=0.5, default=0.14, musical=(0.05, 0.42)),
         P("pluck.decay", "Decay", unit="s", rmin=0.05, rmax=8.0, default=1.0,
           curve=Curve.EXP, formatter="float2", musical=(0.2, 4.0)),
@@ -711,6 +717,13 @@ PLUCK = VoiceSpec(
         P("pluck.bright", "Brightness", default=0.5, musical=(0.1, 0.9)),
         P("pluck.excite", "Excite Length", unit="s", rmin=0.001, rmax=0.05, default=0.008,
           curve=Curve.EXP, formatter="float3", musical=(0.002, 0.03)),
+        # --- tube model (ignored by phPluck; engine_arg strips the prefix so these
+        #     arrive as k / loss / balance, which is what phTube declares) ---
+        P("pluck.k", "Junction", rmin=0.001, rmax=0.2, default=0.01, curve=Curve.EXP,
+          formatter="float3", musical=(0.003, 0.12)),
+        P("pluck.loss", "Loss", rmin=0.9, rmax=1.0, default=0.99, formatter="float3",
+          musical=(0.96, 0.999)),
+        P("pluck.balance", "Tube Balance", rmin=0.1, rmax=0.9, default=0.5, musical=(0.2, 0.8)),
         *_COMMON_TAIL("pluck", ampd=0.9, ampmus=(0.5, 1.1)),
     ],
 )

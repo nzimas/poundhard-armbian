@@ -56,8 +56,13 @@ something audible.
 
 ## 1. Get sound out of it
 
-Power on, open **Schwung → overtake → PoundHard**, and wait for the screen to stop saying
-`starting…`. The engine boots its own SuperCollider and JACK, which takes a few seconds.
+Power on. The **appliance menu** appears on the screen — scroll it with the jogwheel,
+and **push the jogwheel** on **PoundHard** to launch it. Wait for the screen to stop
+saying `starting…`; the engine boots its own SuperCollider, which takes a few seconds.
+
+(To leave PoundHard and return to the menu, use the exit gesture as usual. **SHUT DOWN**
+is the last entry in the menu — the Move's power button is not wired to anything the
+system can see, so that is how you power the machine down cleanly.)
 
 You are now in the **tracks view** — the default. The top two rows of pads are the
 **engine palette**; the sixteen **step buttons** down the side are your sixteen tracks.
@@ -345,13 +350,20 @@ track — for reasons particular to each, explained there.
 - **BOWED** — **STK BandedWG** (`StkBandedWG`, from sc3-plugins): a banded waveguide —
   uniform/tuned bar, glass harmonica, Tibetan bowl. `striking` toggles struck vs bowed, so
   it does both percussive metal and evolving bowed-glass/metal drones. Pitched by the note.
-- **PLUCK** — a **digital-waveguide plucked string with stiffness** (`DWGPluckedStiff`,
-  from sc3-plugins): inharmonic plucks — koto, clavinet, harp, muted string. A short noise
-  burst excites the string; pluck position / decay / damping / brightness shape it. Pitched
-  by the note; frees on silence. (Pure waveguide — no rawwaves needed.)
-- **TUBE** — a **two-tube waveguide** (`TwoTube`, from sc3-plugins): hollow, vocal-tract-ish
-  formant plucks and reedy tones. The tube lengths (set from the note) fix the resonance;
-  `balance` splits them and `k` sets the junction. A short burst excites it.
+- **PLUCK** — a **waveguide voice with two models**, chosen by `mode`. Both are excited by
+  a short noise burst and pitched by the note; both free on silence. (Pure waveguide — no
+  rawwaves needed.)
+  - `mode = pluck` — a **plucked string with stiffness** (`DWGPluckedStiff`, from
+    sc3-plugins): inharmonic plucks — koto, clavinet, harp, muted string. Pluck position /
+    decay / damping / brightness shape it.
+  - `mode = tube` — a **two-tube waveguide** (`TwoTube`, from sc3-plugins): hollow,
+    vocal-tract-ish formant plucks and reedy tones. The tube lengths (set from the note) fix
+    the resonance; `balance` splits them and `k` sets the junction.
+
+  TUBE was its own pad until the two were merged — they were near-identical waveguides
+  driven by the same excitation, so one pad now reaches both and **generate** rolls across
+  all six flavours (KOTO · CLAV · HARP · MUTED · HOLLOW · REEDY). Projects saved before the
+  merge still load: TUBE keeps its old engine type, it just has no pad.
 - **CHAOS** — a voice built from SuperCollider's audio-rate **chaos generators** (feedback
   sine + iterated maps: Latoocarfian, Henon, Standard, Cusp). `type` picks the map; the note
   sets the iteration frequency and `chaosA`/`chaosB` steer the attractor from pitched tone to
@@ -1535,7 +1547,7 @@ overrun the audio thread. Every engine and effect was **measured on the device**
 | NOIZEOP | 12.0 | | CLDS | ~6.0* |
 | ICARUS | 13.2 | | RESO | ~2.0* |
 | MEMBRANE / MALLET / BOWED | ~9 / ~7 / ~8* | | | |
-| PLUCK / TUBE / CHAOS | ~7 / ~7 / ~8* | | | |
+| PLUCK / CHAOS | ~7 / ~8* | | | |
 | WTABLE | ~9.5* | | | |
 | BYTEBEAT | ~6* | | | |
 | SAMPLE | ~3* | | | |
@@ -1558,7 +1570,7 @@ patterns on the device: **worst sustained 47%, worst peak 50%**.
   **that pattern's own tempo**.
 
 The generated tracks are laid out **contiguously from track 1 and grouped by engine**
-(in palette order — DRUM · FM7 · BUCHLOID · MOLLY · RINGS · BEN · NOIZEOP · ICARUS · PLAITS · SHAKER · MEMBRANE · MALLET · BOWED · PLUCK · TUBE · CHAOS · WTABLE · BYTEBEAT · SAMPLE · CSOUND,
+(in palette order — DRUM · FM7 · BUCHLOID · MOLLY · RINGS · BEN · NOIZEOP · ICARUS · PLAITS · SHAKER · MEMBRANE · MALLET · BOWED · PLUCK · CHAOS · WTABLE · BYTEBEAT · SAMPLE · CSOUND,
 with roles in musical order inside each block). Since the step buttons are coloured by
 engine, a generated rig reads as **contiguous colour blocks** rather than a scatter.
 

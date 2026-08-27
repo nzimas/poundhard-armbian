@@ -29,6 +29,12 @@ CS=$PH/csound
 LOGS=$PH/logs; mkdir -p "$LOGS"
 CSLOG=$LOGS/csound.log
 
+# HOME MUST be set. systemd services get no HOME, and the launcher starts the stack as
+# a service - so under the launcher this was empty. Csound's JACK client init uses $HOME
+# (its Berkeley DB registry lives there) and SEGFAULTS without it, on every attempt. That
+# is why engine 20 died on every launcher start yet always worked when started by hand
+# from a login shell, which has HOME. run-engine.sh already does this; this did not.
+export HOME="${HOME:-/data/UserData}"
 export OPCODE6DIR64=$CS/plugins
 export LD_LIBRARY_PATH=$CS/lib:$PH/lib
 export PATH=$CS/bin:$PH/bin:$PATH
@@ -41,6 +47,20 @@ export PATH=$CS/bin:$PH/bin:$PATH
 if pgrep -x csound >/dev/null 2>&1; then
     echo "[csound] replacing an existing instance"
     killall -9 csound 2>/dev/null
+    # SIGKILL gives csound no chance to unregister its JACK client, so the name
+    # 'poundhard_cs' lingers in the graph. Re-registering it before the server has
+    # reaped the corpse makes the new process SEGFAULT on startup - which is exactly
+    # how engine 20 came up silent. Wait for BOTH the process and the JACK client
+    # name to actually disappear.
+    i=0
+    while [ $i -lt 40 ]; do
+        still_proc=0; still_jack=0
+        pgrep -x csound >/dev/null 2>&1 && still_proc=1
+        timeout 2 jack_lsp 2>/dev/null | grep -q "^poundhard_cs:" && still_jack=1
+        [ "$still_proc" = 0 ] && [ "$still_jack" = 0 ] && break
+        i=$((i+1)); sleep 0.25
+    done
+    [ $i -ge 40 ] && echo "[csound] WARNING: 'poundhard_cs' still registered after 10s"
     sleep 1
 fi
 
@@ -53,26 +73,50 @@ i999 0 3153600000
 e
 SCO
 
-echo "[csound] starting (jack client 'poundhard_cs', UDP 11000)"
-csound \
-  -+rtaudio=jack -odac -+jack_client=poundhard_cs \
-  -+jack_outportname=output_ \
-  -b128 -B1024 --sample-rate=44100 --nchnls=36 \
-  --port=11000 --nodisplays -d -m0 \
-  "$CS/orc/ph-engine.orc" "$CS/orc/ph-run.sco" </dev/null > "$CSLOG" 2>&1 &
-CSPID=$!
-echo "[csound] pid=$CSPID (log: $CSLOG)"
-
-# Wait for it to be up before connecting. The marker is the UDP server line, NOT the port
-# listing — `-m0` suppresses the listing, so waiting on that just burned the timeout.
-i=0
-while [ $i -lt 40 ]; do
-    grep -q "UDP server started" "$CSLOG" 2>/dev/null && break
-    kill -0 "$CSPID" 2>/dev/null || { echo "[csound] died on startup:"; tail -n 15 "$CSLOG"; exit 1; }
-    i=$((i+1)); sleep 0.25
+# Csound's JACK client registration is FRAGILE while the graph is busy: starting it
+# while supernova is still loading its sample bank segfaults it outright, with nothing in
+# the log but "Segmentation fault". It is not deterministic, so RETRY rather than leaving
+# engine 20 silent for the whole session (which is exactly what used to happen).
+attempt=1
+CSPID=""
+while [ $attempt -le 4 ]; do
+    echo "[csound] starting (jack client 'poundhard_cs', UDP 11000) attempt $attempt"
+    csound \
+      -+rtaudio=jack -odac -+jack_client=poundhard_cs \
+      -+jack_outportname=output_ \
+      -b128 -B1024 --sample-rate=44100 --nchnls=36 \
+      --port=11000 --nodisplays -d -m0 \
+      "$CS/orc/ph-engine.orc" "$CS/orc/ph-run.sco" </dev/null > "$CSLOG" 2>&1 &
+    CSPID=$!
+    ok=0; i=0
+    while [ $i -lt 40 ]; do
+        if grep -q "UDP server started" "$CSLOG" 2>/dev/null; then ok=1; break; fi
+        kill -0 "$CSPID" 2>/dev/null || break
+        i=$((i+1)); sleep 0.25
+    done
+    # NOTE: this script runs under `set -e`. A bare `[ ... ] && break` returns
+    # non-zero when the test fails and ABORTS the whole script - which silently
+    # killed the retry loop after attempt 1. Use an explicit if.
+    if [ "$ok" = 1 ]; then break; fi
+    echo "[csound] attempt $attempt failed:"; tail -n 3 "$CSLOG"
+    kill -9 "$CSPID" 2>/dev/null || true
+    CSPID=""
+    j=0
+    while [ $j -lt 20 ]; do
+        gone=1
+        if pgrep -x csound >/dev/null 2>&1; then gone=0; fi
+        if timeout 2 jack_lsp 2>/dev/null | grep -q "^poundhard_cs:"; then gone=0; fi
+        if [ "$gone" = 1 ]; then break; fi
+        j=$((j+1)); sleep 0.25
+    done
+    sleep 2
+    attempt=$((attempt + 1))
 done
-sleep 1
-
+if [ -z "$CSPID" ]; then
+    echo "[csound] FAILED after 4 attempts - engine 20 silent"
+    exit 1
+fi
+echo "[csound] pid=$CSPID (log: $CSLOG)"
 # 32 channels: csound output_3..34 -> supernova input_3..34
 if "$CS/bin/ph-jackconnect" poundhard_cs 3 supernova 3 34; then
     echo "[csound] track pairs + audition wired into supernova inputs 3-36"

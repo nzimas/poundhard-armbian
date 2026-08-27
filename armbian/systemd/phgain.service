@@ -1,0 +1,14 @@
+[Unit]
+Description=Move master gain stage (software volume for the master knob)
+After=sound.target
+Wants=move-rt-tune.service
+
+[Service]
+Type=simple
+Environment=LD_LIBRARY_PATH=
+ExecStart=/opt/phhost/phgain
+Restart=always
+RestartSec=3
+
+[Install]
+WantedBy=multi-user.target

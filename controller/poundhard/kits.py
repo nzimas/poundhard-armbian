@@ -248,8 +248,12 @@ def gen_kit(seed: int | None = None) -> dict:
 # --------------------------------------------------------------------------- #
 PALETTE_ENGINES = ["DRUM", "FM7", "BUCHLOID", "MOLLY", "RINGS", "BEN", "NOIZEOP",
                    "ICARUS", "PLAITS", "SHAKER", "MEMBRANE", "MALLET", "BOWED",
-                   "PLUCK", "TUBE", "CHAOS", "WTABLE", "BYTEBEAT", "SAMPLE", "CSOUND",
+                   "PLUCK", "CHAOS", "WTABLE", "BYTEBEAT", "SAMPLE", "CSOUND",
                    "JOLT"]
+# TUBE was pad 15 until it was MERGED INTO PLUCK: both were waveguides fired by a noise
+# burst, so PLUCK now carries a `mode` param (pluck | tube) and reaches both models.
+# TUBE keeps catalog type 14 so pre-merge projects still load - unreachable from the
+# palette, exactly like MIC. That leaves 20 pads.
 # "MIC" is absent: the engine is complete but the Move never switches its audio input on.
 # See the MIC_ENABLED note in ui.js. JOLT therefore takes pad 21 (palette index 20) —
 # the palette index is the PAD, and MIC has never occupied one.
@@ -634,9 +638,21 @@ _PLUCK_SPEC = [
 
 def _pluck_role(spec) -> Role:
     name, note, pos, dec, damp, brt = spec
-    return Role(name, "PLUCK", note_choices=note[0], octave=note[1],
+    return Role(name, "PLUCK", fixed={"pluck.mode": 0.0},
+                note_choices=note[0], octave=note[1],
                 bands={"pluck.pos": pos, "pluck.decay": dec, "pluck.damp": damp,
                        "pluck.bright": brt}, vel=(0.8, 1.05))
+
+
+# The two-tube flavours now live INSIDE PLUCK as model 1 (see PLUCK in catalog.py and
+# ~wguideDefs in engine.scd). They keep the pluck.* prefix, so engine_arg() still hands
+# phTube the k / loss / balance it declares.
+def _pluck_tube_role(spec) -> Role:
+    name, note, k, loss, bal, dec = spec
+    return Role(name, "PLUCK", fixed={"pluck.mode": 1.0},
+                note_choices=note[0], octave=note[1],
+                bands={"pluck.k": k, "pluck.loss": loss, "pluck.balance": bal,
+                       "pluck.decay": dec}, vel=(0.8, 1.05))
 
 
 PLUCK_ROLES: dict[str, Role] = {s[0]: _pluck_role(s) for s in _PLUCK_SPEC}
@@ -661,8 +677,12 @@ def _tube_role(spec) -> Role:
 
 
 TUBE_ROLES: dict[str, Role] = {s[0]: _tube_role(s) for s in _TUBE_SPEC}
-PALETTE_ROLES["TUBE"] = TUBE_ROLES["TB HOLLOW"]
+PALETTE_ROLES["TUBE"] = TUBE_ROLES["TB HOLLOW"]   # legacy type 14 (pre-merge projects)
 _TUBE_WEIGHTS = {"TB HOLLOW": 3, "TB REEDY": 2}
+
+# --- merge: the tube models become PLUCK flavours, so one pad reaches both -------
+PLUCK_ROLES.update({s[0]: _pluck_tube_role(s) for s in _TUBE_SPEC})
+_PLUCK_WEIGHTS.update({"TB HOLLOW": 2, "TB REEDY": 2})
 
 
 # --------------------------------------------------------------------------- #

@@ -134,7 +134,7 @@ const TYPE_COL = {
     MALLET:   [13, 85],   /* Gold / DarkGold — STK ModalBar (marimba/vibraphone/bells) */
     BOWED:    [33, 90],   /* Teal / DarkTeal — STK BandedWG (bowed metal/glass/bowl) */
     PLUCK:    [29, 108],  /* SpringGreen / DarkGreen — DWG plucked stiff string */
-    TUBE:     [37, 96],   /* SkyBlue / DarkBlue — TwoTube waveguide (hollow/reedy) */
+    TUBE:     [37, 96],   /* SkyBlue / DarkBlue — legacy type 14 (merged into PLUCK) */
     CHAOS:    [5, 68],    /* Red / DarkRed — chaotic-map oscillator (glitch/noise) */
     WTABLE:   [45, 91],   /* Violet / DarkViolet — Ableton-sprite wavetable synth */
     BYTEBEAT: [30, 110],  /* BrightGreen / DarkGreen — ByteBeat UGen (8-bit glitch) */
@@ -146,8 +146,11 @@ const TYPE_COL = {
  * row 2 = cells 8..15 (PLAITS..CHAOS), row 3 = cells 16.. (WTABLE, BYTEBEAT). Same
  * order & colours as TYPE_COL.
  * Short-press = audition, Shift+pad = regenerate, hold pad + tap a track = assign. */
+/* TUBE was pad 15 until it was MERGED INTO PLUCK — both were waveguides fired by a
+ * noise burst. PLUCK now carries a `mode` param (pluck | tube) and its generate rolls
+ * both models, so one pad reaches everything the two used to. 20 pads. */
 const ENGINE_TYPES = ['DRUM', 'FM7', 'BUCHLOID', 'MOLLY', 'RINGS', 'BEN', 'NOIZEOP',
-    'ICARUS', 'PLAITS', 'SHAKER', 'MEMBRANE', 'MALLET', 'BOWED', 'PLUCK', 'TUBE', 'CHAOS',
+    'ICARUS', 'PLAITS', 'SHAKER', 'MEMBRANE', 'MALLET', 'BOWED', 'PLUCK', 'CHAOS',
     'WTABLE', 'BYTEBEAT', 'SAMPLE', 'CSOUND', 'JOLT'];
 const N_ENGINES = ENGINE_TYPES.length;
 
@@ -360,10 +363,16 @@ let editFx = new Array(N_STEPS).fill(-1);
 let editFxAmt = [];        /* per step: { "<fx>": wet } overrides, from status */
 let editCycle = new Array(N_STEPS).fill(1);   /* fire every Nth pattern repetition */   /* per-step FX mask mirrored from status */
 let lenArm = false;          /* Shift + master-knob touch: next pad sets the pattern LENGTH */
-const SAMPLE_CELL = 18;
-/* MIC sits on slot 21, immediately after the live CSOUND engine. Unlike SAMPLE it needs no
-   source pad to tap — the room is the source — so holding it alone arms the capture. */
-const MIC_CELL = 20;
+/* DERIVED, never hardcoded. These were literals (18 and 20) and the PLUCK/TUBE merge
+   shifted every engine after PLUCK down one — so SAMPLE_CELL still said 18, which now
+   points at CSOUND. That silently broke BOTH engines: holding SAMPLE did nothing, and
+   the CSOUND pad was treated as the sample pad instead of auditioning. Derive them so
+   the palette can be reordered again without breaking anything. */
+const SAMPLE_CELL = ENGINE_TYPES.indexOf('SAMPLE');
+/* MIC has no pad of its own (the engine is complete but the Move never switches its audio
+   input on — see MIC_ENABLED below). It sits immediately after the last palette engine.
+   Unlike SAMPLE it needs no source pad to tap — the room is the source. */
+const MIC_CELL = N_ENGINES;
 /* OFF, because the hardware will not feed it. PROVEN, not assumed: with a loud pattern
    playing through the Move's OWN SPEAKER, inputs 0-1 measured ~0.011 — identical to the
    level with the transport stopped. A live capsule inches from a speaker cannot fail to

@@ -1,0 +1,7 @@
+[Unit]
+Description=Recover a wedged JACK server (display/pads dead while jackd still runs)
+After=jackd-move.service
+
+[Service]
+Type=oneshot
+ExecStart=/usr/local/sbin/move-jack-watchdog.sh

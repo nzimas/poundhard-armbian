@@ -438,8 +438,10 @@ def _role_pool() -> dict:
     pool.update(kits.MEMBRANE_ROLES)                  # struck membranes — percussion
     pool.update(kits.MALLET_ROLES)                    # STK modal bars — tonal mallets
     pool.update(kits.BOWED_ROLES)                     # STK banded waveguide — tonal metal/glass
-    pool.update(kits.PLUCK_ROLES)                     # DWG plucked strings — tonal plucks
-    pool.update(kits.TUBE_ROLES)                      # two-tube waveguide — tonal/formant
+    # PLUCK_ROLES now carries the two-tube flavours too (TB HOLLOW / TB REEDY) as model 1.
+    # Do NOT also add TUBE_ROLES: the keys are identical, so it would overwrite the merged
+    # PLUCK entries with the legacy type-14 versions and resurrect a retired engine here.
+    pool.update(kits.PLUCK_ROLES)                     # waveguide voice — plucks + tubes
     pool.update(kits.CHAOS_ROLES)                     # chaotic-map oscillator — texture/noise
     pool.update(kits.WTABLE_ROLES)                    # Ableton-sprite wavetable — tonal/bass/pad
     pool["SAMPLE"] = kits.PALETTE_ROLES["SAMPLE"]   # capture engine — texture
@@ -449,7 +451,7 @@ def _role_pool() -> dict:
         _CAT[n] = "perc"
     for n in kits.MEMBRANE_ROLES:
         _CAT[n] = "perc"
-    for n in list(kits.MALLET_ROLES) + list(kits.BOWED_ROLES) + list(kits.PLUCK_ROLES) + list(kits.TUBE_ROLES):
+    for n in list(kits.MALLET_ROLES) + list(kits.BOWED_ROLES) + list(kits.PLUCK_ROLES):
         _CAT[n] = "tonal"
     for n in kits.CHAOS_ROLES:
         _CAT[n] = "texture"

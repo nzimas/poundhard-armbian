@@ -1,0 +1,14 @@
+[Unit]
+Description=Move realtime tuning for the SPI/audio path
+Documentation=ported from stock /etc/init.d/move
+After=sysinit.target
+Before=multi-user.target
+ConditionPathExists=/dev/ablspi0.0
+
+[Service]
+Type=oneshot
+RemainAfterExit=yes
+ExecStart=/usr/local/sbin/move-rt-tune.sh
+
+[Install]
+WantedBy=multi-user.target

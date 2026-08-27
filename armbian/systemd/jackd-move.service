@@ -1,0 +1,19 @@
+[Unit]
+Description=JACK server on the native Move driver (owns /dev/ablspi0.0)
+After=move-rt-tune.service
+Wants=move-rt-tune.service
+ConditionPathExists=/dev/ablspi0.0
+
+[Service]
+Type=simple
+Environment=LD_LIBRARY_PATH=/data/UserData/poundhard/lib:/data/UserData/rnbo/lib
+Environment=JACK_DRIVER_DIR=/data/UserData/rnbo/lib/jack
+Environment=JACK_NO_AUDIO_RESERVATION=1
+ExecStart=/data/UserData/poundhard/bin/jackd -R -P 70 -d move
+# The appliance stack is spawned by the launcher, not by us; never sweep the cgroup.
+KillMode=process
+Restart=always
+RestartSec=3
+
+[Install]
+WantedBy=multi-user.target

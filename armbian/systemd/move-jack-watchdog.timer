@@ -1,0 +1,10 @@
+[Unit]
+Description=Check every 20s that the JACK server still has a graph
+
+[Timer]
+OnBootSec=180s
+OnUnitActiveSec=30s
+AccuracySec=5s
+
+[Install]
+WantedBy=timers.target

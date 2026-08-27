@@ -10,7 +10,11 @@ pkill -9 -f compass_host.lua 2>/dev/null
 # to an orphan server (ready, zero nodes, no audio); a surviving csound loses its JACK
 # server with jackd and then sits there dead-but-present, which was enough to make
 # run-csound.sh skip starting a live one — the CSOUND engine came back silent.
-killall -9 sclang scsynth supernova jackd csound 2>/dev/null
+# jackd is NOT killed any more. Under Armbian it runs the native `move`
+# driver and owns /dev/ablspi0.0 - it is the display + jogwheel host that
+# the appliance launcher draws through. Killing it strands the device with
+# a frozen screen and no input. Audio clients only:
+killall -9 sclang scsynth supernova csound 2>/dev/null
 rm -f /dev/shm/SuperColliderServer_* 2>/dev/null
 rm -f /data/UserData/schwung/jack_running 2>/dev/null
 rm -f /data/UserData/poundhard/ipc/*.json /data/UserData/poundhard/ipc/ui_hb.txt /dev/shm/poundhard/* 2>/dev/null
