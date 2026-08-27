@@ -171,7 +171,12 @@ cp "$PORT"/armbian/userpatches/extensions/*.sh     "$BUILD/userpatches/extension
 cp "$PORT/armbian/userpatches/extras/verify.sh"    "$BUILD/userpatches/extras/"
 cp "$PORT/kernel-config/move.fragment.config"      "$BUILD/userpatches/"
 cp "$PORT"/dts/ablspi-move-cm*.dts                 "$BUILD/userpatches/overlay/dts/"
-info "board file, customize hook, extension, fragment and dts staged"
+# customize-image.sh builds move-bringup INSIDE the image chroot from this source
+# tree (bind-mounted to /tmp/overlay/move-bringup-src). Without it the build dies
+# late, during rootfs customization, with "neither ... nor pre-built core debs".
+rm -rf "$BUILD/userpatches/overlay/move-bringup-src"
+cp -a "$PORT/move-bringup" "$BUILD/userpatches/overlay/move-bringup-src"
+info "board file, customize hook, extension, fragment, dts and move-bringup source staged"
 
 # --------------------------------------------------------------------- compile
 b "compiling (this is the long part — an hour or more on a first run)"
