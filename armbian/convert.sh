@@ -68,7 +68,7 @@ JACKDRV=/data/UserData/rnbo/lib/jack/jack_move.so
    not shipped in this bundle. Install RNBO on the Move (stock) first."
 info "jack_move.so present"
 
-for t in tar gzip python3 ssh-keygen blkid findmnt mountpoint df; do
+for t in tar gzip python3 ssh-keygen blkid findmnt mountpoint df awk install; do
     command -v "$t" >/dev/null 2>&1 || die "stock system is missing '$t', which the
    conversion needs. Refusing to start: a tool discovered missing halfway through
    would leave this machine half-converted."
@@ -204,6 +204,7 @@ info "authorized_keys installed"
 python3 -c "import uuid;open('/data/etc/machine-id','w').write(uuid.uuid4().hex+'\n')"
 mkdir -p /data/var/lib/dbus
 cp /data/etc/machine-id /data/var/lib/dbus/machine-id
+mkdir -p /data/etc/ssh
 for t in rsa ecdsa ed25519; do
     f=/data/etc/ssh/ssh_host_${t}_key
     rm -f "$f" "$f.pub"

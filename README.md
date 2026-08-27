@@ -266,7 +266,15 @@ fixes on top of it does not:
 ```
 
 It excludes, and verifies that it excludes, everything that must not be redistributed:
-Ableton's `/opt/move`, your data, the Wi-Fi PSK, SSH host keys and the machine-id.
+Ableton's `/opt/move` and dbus service files, your data, the Wi-Fi PSK, SSH host keys and
+the machine-id — and then verifies the opposite too, that the pieces the system cannot boot
+without (`fstab`, `data.mount` and its enable symlink, `jackd-move`) are actually in there.
+
+Publishing it as the release asset `install.sh` downloads:
+
+```bash
+./armbian/publish-bundle.sh [tag]
+```
 
 The conversion cannot be rehearsed on a converted device — once p4 carries the Armbian
 root, that machine is no longer a stock Move — so it is tested against a **synthetic** one:
@@ -620,6 +628,7 @@ armbian/sbin/           move-rt-tune.sh  move-jack-watchdog.sh  move-shutdown.sh
 armbian/boot/           config.txt.armbian  armbian-cmdline.txt  move-spidev0-off.dts
 armbian/build-bundle.sh capture a working Move into a redistributable Armbian bundle
 armbian/convert.sh      stock -> Armbian, in place, over the network (runs on the device)
+armbian/publish-bundle.sh  upload a built bundle as the release asset install.sh fetches
 tests/                  convert-harness.sh + run-convert-test.sh — the conversion, tested
                         against a synthetic stock card on a loopback disk
 bundle/armbian/         the built bundle (rootfs.tar.gz + boot payload) — not in git
