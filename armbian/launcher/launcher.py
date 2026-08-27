@@ -29,6 +29,15 @@ NOTE_TOUCH = 9   # MoveMainTouch  capacitive touch - deliberately ignored
 CC_BACK   = 51   # MoveBack
 CC_MASTER = 79   # MoveMaster - master volume knob, RELATIVE encoder, no LED
 
+# Pad grid, taken from ui.js PAD_NOTES: 4 rows x 8 columns, top row 92..99
+# descending to bottom row 68..75. Two of them are menu shortcuts, so the
+# common actions do not need the jogwheel at all.
+PAD_TOP_LEFT     = 92            # launch PoundHard
+PAD_BOTTOM_RIGHT = 75            # shut down
+PAD_COL_LAUNCH   = 8             # BrightGreen - go
+PAD_COL_SHUTDOWN = 5             # Red - stop
+SHORTCUT_APP     = FIRST         # what the top-left pad launches
+
 GAIN_ADDR = ("127.0.0.1", 7666)          # phgain control socket
 MASTER_CLIENT = "supernova"              # only this client's out is master audio
 VOL_STATE = "/var/lib/move-launcher/volume"
@@ -101,6 +110,7 @@ class Launcher:
         self.client = None           # set by main(); used to rewire audio
         self.confirm = False         # shutdown confirmation showing
         self.led_queue = []          # raw 3-byte midi awaiting the process callback
+        self._pads_lit = None        # last shortcut-pad colours queued, or None
         self.led_lock = threading.Lock()
         self.push_vol()
         self.msg = None
@@ -109,6 +119,60 @@ class Launcher:
         self.payload = b""
         self.lock = threading.Lock()
         self.render()
+
+    def set_pad(self, note, colour):
+        """Queue one pad LED. Channel 16 only: the driver drops everything else."""
+        with self.led_lock:
+            self.led_queue.append(bytes([0x9F, note & 0x7F, colour & 0x7F]))
+
+    def paint_pads(self):
+        """Light the two shortcut pads while the MENU owns the grid.
+
+        Only queued when the desired state changes: render() runs often, and
+        re-sending these every frame would crowd out the display frames sharing
+        the same MIDI port. While an appliance is running the grid is its own,
+        so we paint nothing and repaint on the way back.
+        """
+        want = None if (self.running or self.ui) else (
+            PAD_COL_SHUTDOWN if self.confirm else PAD_COL_LAUNCH,
+            PAD_COL_SHUTDOWN,
+        )
+        if want == self._pads_lit:
+            return
+        self._pads_lit = want
+        if want is None:
+            return
+        self.set_pad(PAD_TOP_LEFT, want[0])
+        self.set_pad(PAD_BOTTOM_RIGHT, want[1])
+
+    def pad_launch(self):
+        """Top-left pad: start SHORTCUT_APP without touching the jogwheel."""
+        if self.running or self.ui:
+            return
+        if self.confirm:                 # a pending shutdown prompt: cancel it
+            self.confirm = False
+            self.flash("CANCELLED", 1.0)
+            return
+        for i, it in enumerate(self.items):
+            if it["id"] == SHORTCUT_APP:
+                self.sel = i
+                self.select()            # same path as a jogwheel push
+                return
+        self.flash("NOT INSTALLED")
+
+    def pad_shutdown(self):
+        """Bottom-right pad: arm the shutdown prompt, then confirm it.
+
+        Deliberately the same two-press confirmation as the menu entry — a
+        single pad press must not be able to power the machine off mid-take.
+        """
+        if self.running or self.ui:
+            return
+        for i, it in enumerate(self.items):
+            if it["id"] == SHUTDOWN_ID:
+                self.sel = i
+                break
+        self.select()
 
     def clear_all_leds(self):
         """Turn every pad and button LED off.
@@ -125,6 +189,7 @@ class Launcher:
             msgs.append(bytes([0xBF, i, 0]))     # button LEDs
         with self.led_lock:
             self.led_queue.extend(msgs)
+        self._pads_lit = None        # everything is dark now; repaint on next tick
 
     def take_leds(self, limit=48):
         with self.led_lock:
@@ -401,6 +466,7 @@ class Launcher:
         if self.msg and time.time() > self.msg_until:
             self.msg = None
             self.render()
+        self.paint_pads()
 
     def current_payload(self):
         with self.lock:
@@ -649,6 +715,10 @@ def main():
                     app.volume(d2 if 1 <= d2 <= 63 else -(128 - d2) if d2 >= 64 else 0)
                 elif kind == 0xB0 and d1 == CC_PUSH and d2 > 0:
                     app.select()
+                elif kind == 0x90 and d2 > 0 and d1 == PAD_TOP_LEFT:
+                    app.pad_launch()          # shortcut: straight into PoundHard
+                elif kind == 0x90 and d2 > 0 and d1 == PAD_BOTTOM_RIGHT:
+                    app.pad_shutdown()        # shortcut: arm/confirm shutdown
             app.tick()
             now = time.time()
             if now - last_rewire[0] > 3.0:

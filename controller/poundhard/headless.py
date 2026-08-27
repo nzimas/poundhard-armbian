@@ -23,6 +23,7 @@ import traceback
 from pathlib import Path
 
 from . import catalog
+from . import kits
 from . import lfo as lfomod
 from . import whim as whimmod
 from . import mastering as mastmod
@@ -1562,11 +1563,24 @@ class Controller:
             self._smp_arm(int(arg))
         elif cmd == "assign":                         # hold pad + tap track = assign sound
             idx = int(p.get("engine", -1)); t = int(p.get("track", -1))
-            if idx == catalog.TYPE_INDEX.get("MIC") and 0 <= t < N_TRACKS:
+            # `idx` is a PALETTE CELL, not an engine type index — palette_assign
+            # below indexes self.palette with it. The two numbering schemes were
+            # identical until PLUCK and TUBE merged: the palette compacted to 20
+            # cells while TYPE_INDEX kept TUBE's slot reserved, so everything
+            # after PLUCK sits one lower in the palette than in TYPE_INDEX.
+            # Comparing them therefore stopped matching for SAMPLE (cell 17 vs
+            # type 18) and the buffer handover never ran — the track was assigned
+            # SAMPLE correctly and then played the silent buffer, which is a very
+            # confusing way for an index bug to present. Resolve to a NAME.
+            # (MIC has no palette cell of its own; ui.js addresses it as the cell
+            # one past the end, which is why it kept working by coincidence.)
+            pal = kits.PALETTE_ENGINES
+            ename = pal[idx] if 0 <= idx < len(pal) else ("MIC" if idx == len(pal) else "")
+            if ename == "MIC" and 0 <= t < N_TRACKS:
                 # the take becomes the track's own buffer, then the pad is free again
                 self.bridge.smpassign(t, self._mic_path())
                 self._mic_release()
-            if idx == catalog.TYPE_INDEX.get("SAMPLE") and 0 <= t < N_TRACKS:
+            if ename == "SAMPLE" and 0 <= t < N_TRACKS:
                 # hand the captured buffer to the track, then RELEASE the pad
                 self.bridge.smpassign(t, self._smp_paths()[1])
                 self._smp_release()
