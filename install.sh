@@ -141,9 +141,17 @@ EOF
     step "staged"
 
     say "converting (the Move will reboot itself at the end)"
-    # The converter reboots, which drops the connection: that is success, not
-    # failure, so a non-zero exit from the closing ssh is expected here.
-    $SSH 'bash /data/.ph-convert/convert.sh' || true
+    # The converter reboots, which drops the connection, so ssh coming back
+    # non-zero is expected. But a converter that REFUSED in preflight also exits
+    # non-zero, and swallowing that would send us into a ten-minute wait for a
+    # machine that was never going to reboot. 255 is the dropped connection;
+    # anything else is the converter itself, and it has already said why.
+    CONV_RC=0
+    $SSH 'bash /data/.ph-convert/convert.sh' || CONV_RC=$?
+    if [ "$CONV_RC" != 0 ] && [ "$CONV_RC" != 255 ]; then
+        die "the converter stopped before changing anything (exit $CONV_RC).
+   The reason is printed above. Nothing on the Move was modified."
+    fi
 
     say "waiting for the Move to come back on Armbian"
     # Its ssh host key was regenerated during the conversion (a bundle-wide
@@ -163,7 +171,11 @@ EOF
    it is reachable on the stock system after a tryboot power cycle, and stock
    was never erased."
     step "Armbian is up: $($SSH 'uname -r')"
-    $SSH 'rm -rf /data/.ph-convert' || true
+    # The staging dir was written to p4's root while p4 was mounted at /data. Now
+    # that p4 IS /, it lives at /.ph-convert -- roughly a gigabyte of bundle that
+    # would otherwise sit there for good.
+    $SSH 'rm -rf /.ph-convert /data/.ph-convert' || true
+    step "staging area removed"
 
     say "confirming your data survived"
     $SSH 'n=$(ls -A /data/UserData 2>/dev/null | wc -l)

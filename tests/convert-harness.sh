@@ -133,6 +133,26 @@ grep -q "root=PARTUUID=$WANT" /mnt/p1y/armbian-cmdline.txt \
   && ok "cmdline root= points at THIS card ($WANT)" || no "cmdline root= not rewritten"
 umount /mnt/p1y
 
+# The PSK passes through a staging file. It must not still be sitting there:
+# /data survives the conversion, so anything left behind is left behind for good.
+if grep -rqs 'sup3rs3cr3t-psk' /data/.ph-convert 2>/dev/null; then
+    no "plaintext wi-fi PSK left behind in the staging area"
+    grep -rls 'sup3rs3cr3t-psk' /data/.ph-convert 2>/dev/null | head -3
+else
+    ok "no plaintext PSK left in the staging area"
+fi
+# ...and nowhere the conversion CREATED it, except the 0600 keyfile meant to hold
+# it. move-data is excluded on purpose: the user's own stock ConnMan config lives
+# there and holds this passphrase because it always did. Preserving it is the
+# point -- deleting it would be destroying their data, not protecting them.
+STRAY=$(grep -rls 'sup3rs3cr3t-psk' /data/etc /data/root 2>/dev/null \
+        | grep -v 'system-connections/move-wifi.nmconnection' | head -3 || true)
+[ -z "$STRAY" ] && ok "PSK confined to the NetworkManager keyfile" \
+                || { no "PSK found outside the keyfile:"; echo "$STRAY"; }
+grep -qs 'sup3rs3cr3t-psk' /data/var/lib/move-data/settings/connman/lib/connman/*/settings \
+  && ok "user's own stock ConnMan config preserved untouched" \
+  || no "the user's stock ConnMan config was altered or lost"
+
 # The unpacked system has to be coherent, not merely present.
 [ -f /data/usr/lib/systemd/system/data.mount ] \
   && ok "data.mount present (so /data will be bind-mounted on boot)" || no "data.mount missing"
