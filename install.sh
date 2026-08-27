@@ -43,10 +43,11 @@ SCP="scp $SSHOPT -q"
 PH=/data/UserData/poundhard
 MOD=/data/UserData/schwung/modules/overtake/poundhard
 
-# Where the Armbian bundle comes from when it is not sitting in the repo.
+# The Armbian bundle is BUILT on this machine, never downloaded: the image ends
+# up containing Ableton's /opt/move, taken from the user's own Move, which is not
+# something anyone may redistribute. See armbian/build-armbian.sh.
 BUNDLE_DIR="${PH_BUNDLE:-$HERE/bundle/armbian}"
-BUNDLE_TAG="${PH_BUNDLE_TAG:-armbian-bundle-v1}"
-BUNDLE_URL="https://github.com/nzimas/poundhard-armbian/releases/download/${BUNDLE_TAG}"
+BUILD_WORK="${PH_BUILD_WORK:-$HOME/.cache/poundhard-armbian-build}"
 
 # macOS tags files with com.apple.provenance; GNU tar on the device warns about every
 # one of them. Strip xattrs if the local tar supports it (bsdtar and GNU tar both do).
@@ -76,21 +77,32 @@ step "kernel $KVER  →  ${STATE}"
 if [ "$STATE" = stock ]; then
     say "this Move is running stock AbletonOS"
 
-    # The bundle: use a local one if present, otherwise fetch the release asset.
+    # The bundle is built here, on this machine, from source. Nothing about the
+    # operating system is fetched pre-built -- see armbian/build-armbian.sh for
+    # why that is a requirement and not a preference.
     if [ -f "$BUNDLE_DIR/rootfs.tar.gz" ] && [ -f "$BUNDLE_DIR/boot/armbian-Image" ]; then
-        step "using local bundle: $BUNDLE_DIR"
+        step "using the bundle already built at $BUNDLE_DIR"
     else
-        step "no local bundle — downloading ${BUNDLE_TAG}"
-        mkdir -p "$BUNDLE_DIR/boot/overlays"
-        for f in MANIFEST SHA256SUMS rootfs.tar.gz \
-                 boot/armbian-Image boot/bcm2711-rpi-cm4-armbian.dtb \
-                 boot/armbian-cmdline.txt boot/config.txt.armbian \
-                 boot/overlays/ablspi-move-cm4.dtbo boot/overlays/move-spidev0-off.dtbo \
-                 boot/overlays/ablspi.dtbo; do
-            curl -fL# -o "$BUNDLE_DIR/$f" "$BUNDLE_URL/$(echo "$f" | tr '/' '_')" \
-              || die "could not download $f from $BUNDLE_URL
-   Build it yourself from a working Move with:  ./armbian/build-bundle.sh <host>"
-        done
+        say "building Armbian from source (Docker)"
+        cat <<'EOF'
+   No bundle here yet, so one gets built now. This clones the Move Armbian port
+   and Armbian's build framework, takes the Move firmware off your own device,
+   and compiles an image locally.
+
+     Requires:  Docker (running), ~30GB free disk, bash 5+
+     Takes:     an hour or more the first time; reruns reuse the cache
+
+   It is built rather than downloaded because the image contains Ableton's own
+   /opt/move, copied from your Move. That is yours to install on your machine
+   and nobody else's to hand out.
+EOF
+        "$HERE/armbian/build-armbian.sh" "$HOST" "$BUILD_WORK" \
+          || die "the Armbian build did not complete — see the output above"
+        IMG=$(cat "$BUILD_WORK/LAST_IMAGE" 2>/dev/null || true)
+        [ -n "$IMG" ] && [ -f "$IMG" ] || die "the build reported no image"
+        say "packaging the image into a bundle"
+        "$HERE/armbian/image-to-bundle.sh" "$IMG" "$BUNDLE_DIR" \
+          || die "could not turn $IMG into an installable bundle"
     fi
 
     if [ -f "$BUNDLE_DIR/SHA256SUMS" ]; then

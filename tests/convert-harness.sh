@@ -174,6 +174,13 @@ grep -qs 'sup3rs3cr3t-psk' /data/var/lib/move-data/settings/connman/lib/connman/
   && ok "data.mount is enabled" || no "data.mount not enabled"
 grep -q 'mmcblk0p4' /data/etc/fstab 2>/dev/null \
   && ok "fstab roots on p4" || no "fstab wrong"
+grep -q 'mmcblk0p1 */boot/firmware' /data/etc/fstab 2>/dev/null \
+  && ok "fstab mounts the boot partition" || no "fstab has no /boot/firmware entry"
+# A source-built rootfs arrives with the build image's UUIDs. If any survive,
+# /boot/firmware would silently never mount on this card.
+grep -q '^UUID=' /data/etc/fstab 2>/dev/null \
+  && { no "stale UUIDs from the build image left in fstab:"; grep '^UUID=' /data/etc/fstab; } \
+  || ok "no stale build-image UUIDs in fstab"
 
 echo
 echo "== re-running the converter on the now-converted card (must refuse)"

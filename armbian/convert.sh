@@ -214,6 +214,21 @@ if [ -n "$(ls -A "$PRESERVE/dbus/system.d" 2>/dev/null)" ]; then
 fi
 info "ableton dbus service files restored"
 
+# fstab. A source-built rootfs carries the UUIDs of the IMAGE it was built as,
+# which name partitions that do not exist on this card -- / still comes up
+# because the kernel is told root= on the command line, but /boot/firmware
+# silently never mounts, and the next kernel update writes into a directory
+# instead of the boot partition. Write it for the card in front of us.
+cat > /data/etc/fstab <<FSTAB
+# Move + Armbian — rootfs on p4, the Move's FAT boot partition on p1.
+# Written by the PoundHard converter for THIS card.
+$P4  /               ext4   defaults,noatime,errors=remount-ro  0 1
+$P1  /boot/firmware  vfat   defaults                            0 2
+tmpfs           /tmp            tmpfs  defaults,nosuid                     0 0
+FSTAB
+mkdir -p /data/boot/firmware
+info "fstab written for this card (root=$P4, boot=$P1)"
+
 install -d -m 700 /data/root/.ssh
 install -m 600 "$PRESERVE/ssh/authorized_keys" /data/root/.ssh/authorized_keys
 info "authorized_keys installed"

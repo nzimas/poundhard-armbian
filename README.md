@@ -201,18 +201,30 @@ never written to, which is what makes the escape hatch work.
 
 | Requirement | Why |
 |---|---|
+| **Docker**, running | Armbian is **built on your machine**, not downloaded. The build framework runs in a container, and extracting the Move firmware needs a Debian userland macOS does not have |
+| **~30 GB free disk** and **bash 5+** | the Armbian build cache and image. macOS ships bash 3.2 — `brew install bash` |
 | **Key-based root SSH** to the Move | the installer drives everything over SSH (`ssh-copy-id root@move.local`) |
 | **Wi-Fi already configured** in stock | there is no Ethernet on a Move; the installer copies your saved credentials across so the machine stays reachable |
 | **`jack_move.so` present once** | the native driver. It is not shipped in the bundle, and it ships inside the RNBO runtime rather than with Ableton's own software — so RNBO has to have been installed **once**, purely as the source of that one file. The installer copies it into PoundHard's tree, after which **RNBO can be deleted and is never needed again** |
 
-The installer checks all three before it writes anything, and stops with a specific
-message rather than half-converting a machine.
+The installer checks every one of these before it writes anything, and stops with a
+specific message rather than half-converting a machine.
+
+> **Why Armbian is built and not shipped.** The image is compiled with a firmware package
+> extracted from *your* Move, so the finished rootfs contains Ableton's `/opt/move`. That
+> is entirely legitimate on your own machine for your own device — and exactly why nobody
+> can hand you a prebuilt image. Building it locally is what keeps the whole thing
+> automatic *and* legitimate. The bundle it produces is marked `redistributable=no`; do not
+> upload it anywhere.
 
 ### What it does
 
-**Stage A — Armbian** (skipped if the Move is already converted). It resolves the bundle
-(a local `bundle/armbian/`, or the release asset, checksum-verified), shows you exactly
-what is about to happen, and waits for you to type `CONVERT`. Then it stages the bundle to
+**Stage A — Armbian** (skipped if the Move is already converted). If there is no bundle in
+`bundle/armbian/` yet, it **builds one**: it clones the
+[Move Armbian port](https://github.com/djhardrich/move-spi-armbian) and Armbian's build
+framework, extracts the Move firmware from your device over SSH, compiles the image in
+Docker, and packages it. Expect an hour or more the first time; reruns reuse the cache.
+Then it shows you exactly what is about to happen and waits for you to type `CONVERT`. Then it stages the bundle to
 `/data` — never `/tmp`, because stock's root partition is 463 MB and ~99% full — and runs
 the converter on the device, which:
 
@@ -255,26 +267,35 @@ This matters more than it looks: the instrument is built for a user with a sever
 impairment, for whom "just pop the SD card out and reflash it" is not a recovery
 procedure. Every step of the conversion is therefore reversible from the network.
 
-### Building and testing the bundle yourself
+### Building the bundle yourself
 
-The bundle is captured from a Move that already works, because that device is the only
-complete specification of the system — the kernel reproduces from source, the afternoon of
-fixes on top of it does not:
-
-```bash
-./armbian/build-bundle.sh <working-move-host>
-```
-
-It excludes, and verifies that it excludes, everything that must not be redistributed:
-Ableton's `/opt/move` and dbus service files, your data, the Wi-Fi PSK, SSH host keys and
-the machine-id — and then verifies the opposite too, that the pieces the system cannot boot
-without (`fstab`, `data.mount` and its enable symlink, `jackd-move`) are actually in there.
-
-Publishing it as the release asset `install.sh` downloads:
+`install.sh` does this for you when there is no bundle, but the two steps are separate
+scripts and can be run by hand:
 
 ```bash
-./armbian/publish-bundle.sh [tag]
+./armbian/build-armbian.sh <move-host>          # clone port + armbian, build in Docker
+./armbian/image-to-bundle.sh <image.img>        # image -> installable bundle
 ```
+
+`build-armbian.sh` follows the port's own `BUILD.md` rather than reimplementing it — the
+staging list and the `compile.sh` invocation are that document's, and the firmware
+extraction runs the port's own script. Every stage is skipped if its output already exists,
+so a re-run after a failure resumes rather than starting over.
+
+`image-to-bundle.sh` takes the pieces out of the built image rather than flashing it: the
+kernel, the CM4 device tree, the `ablspi` overlay, and the rootfs as a tarball. It compiles
+one overlay of our own (`move-spidev0-off` — `ablspi` needs GPIO 3 and the stock `spidev@0`
+node claims it) and deliberately ships **no initrd**: the Move boots the kernel directly,
+and 20 MB of initramfs would not fit beside a 29 MB kernel on a 68 MB boot partition that
+already holds Ableton's files.
+
+It then checks the result both ways — that `fstab`, `data.mount` and `python3` are present,
+and that no per-device identity (SSH host keys, machine-id, NetworkManager credentials)
+came along to be shared across installs.
+
+There is also `./armbian/build-bundle.sh <working-move-host>`, which captures a bundle from
+a Move that already runs the stack. It is the older path, useful for cloning a machine you
+have already got working; the source build is what `install.sh` uses.
 
 The conversion cannot be rehearsed on a converted device — once p4 carries the Armbian
 root, that machine is no longer a stock Move — so it is tested against a **synthetic** one:
@@ -628,7 +649,8 @@ armbian/sbin/           move-rt-tune.sh  move-jack-watchdog.sh  move-shutdown.sh
 armbian/boot/           config.txt.armbian  armbian-cmdline.txt  move-spidev0-off.dts
 armbian/build-bundle.sh capture a working Move into a redistributable Armbian bundle
 armbian/convert.sh      stock -> Armbian, in place, over the network (runs on the device)
-armbian/publish-bundle.sh  upload a built bundle as the release asset install.sh fetches
+armbian/build-armbian.sh   build Armbian from source in Docker (clones the port + armbian/build)
+armbian/image-to-bundle.sh turn a built .img into the installable bundle
 tests/                  convert-harness.sh + run-convert-test.sh — the conversion, tested
                         against a synthetic stock card on a loopback disk
 bundle/armbian/         the built bundle (rootfs.tar.gz + boot payload) — not in git
@@ -815,6 +837,21 @@ an angular, industrial typeface that suits the hard, percussion-centric aestheti
   running server using PoundHard's **own** `libjackserver` and exactly one file — the
   driver — from RNBO. It is copied into `$PH/lib/jack/` at install time now, and RNBO can
   be deleted. Check what a process actually has mapped before believing a path.
+- **A source-built rootfs carries the UUIDs of the image, not of the card.** `/etc/fstab`
+  comes out of the build naming partitions that do not exist on the target. `/` still comes
+  up because the kernel is told `root=` on the command line, so the damage is quiet:
+  `/boot/firmware` never mounts, and the next kernel update writes into an ordinary
+  directory instead of the boot partition. The converter rewrites `fstab` for the card in
+  front of it, and the harness fails if a single `UUID=` survives.
+- **The Move's boot partition is 68 MB and already has Ableton's files on it.** The kernel
+  is 29 MB. That is the whole reason the bundle ships no initrd — the Move boots the kernel
+  directly with `root=` by PARTUUID and ext4 built in, and a 20 MB initramfs we never load
+  would not fit. The converter checks p1's free space against the kernel before it starts.
+- **Building the image locally is a licensing requirement, not a preference.** The build
+  installs a firmware package extracted from the user's own Move, so the finished rootfs
+  contains Ableton's `/opt/move`. That is fine on your machine for your device and
+  impossible to hand to anyone else — which is why there is no prebuilt image to download
+  and why the bundle is stamped `redistributable=no`.
 - **`root=` in the cmdline must be rewritten per card.** The bundle carries the cmdline from
   the machine it was built on, and a PARTUUID identifies *that* card. The converter reads
   the target's own PARTUUID with `blkid` and substitutes it — otherwise the first machine
