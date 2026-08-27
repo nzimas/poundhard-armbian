@@ -25,3 +25,7 @@ move/bundle/csound/
 
 # the unpacked CDP set — the tracked artefact is the tarball beside it
 move/bundle/cdp/
+
+# Built Armbian bundle (hundreds of MB — distributed as a GitHub release asset)
+# Root-anchored: move/bundle/ holds the vendored runtime tarballs and IS tracked.
+/bundle/

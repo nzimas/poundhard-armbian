@@ -178,22 +178,61 @@ configurable via the `PH_WEB_PORT` environment variable.
 
 ## Install
 
-**Prerequisite: the Move must already be running Armbian** with the native `move` JACK
-driver present (`/dev/ablspi0.0` and `jack_move.so`). Getting there is a one-time
-operation described in [The system underneath](#the-system-underneath); it replaces
-Ableton's software on the device and is not reversible without the stock SD image.
-
-Once the machine is on Armbian, the entire stack — engine runtime, Csound, CDP,
-controller, UI host, master-volume client, appliance menu and all systemd units —
-installs with **one command from your workstation**:
+**One command, from a stock Move to a working instrument.** `install.sh` is the whole
+bundle: point it at a Move still running Ableton's software and it installs Armbian *and*
+PoundHard, in that order, and hands you back a machine with the appliance menu on screen.
 
 ```bash
-./install.sh [move-host]     # default host: move.local
+./install.sh [move-host]          # default host: move.local
 ```
 
-That is the whole deployment. It is idempotent — run it again after any change and it
-redeploys and restarts what it needs. It takes a couple of minutes on first run (it
-compiles the volume client on the device) and prints a verification block at the end:
+Point it at a Move that has already been converted and it skips straight to redeploying
+PoundHard, leaving the operating system alone. It is idempotent either way — run it again
+after any change.
+
+**The SD card never comes out, and nothing is erased.** Armbian's root is unpacked onto
+partition 4, the same 54 GB filesystem stock uses for `/data`. Your existing projects,
+samples and settings are **renamed** into `/var/lib/move-data` — same filesystem, so it is
+a rename and not a copy, and it is instant — then bind-mounted back at `/data`, where
+everything expects to find them. Stock AbletonOS stays intact on its own partition and is
+never written to, which is what makes the escape hatch work.
+
+### What you need first
+
+| Requirement | Why |
+|---|---|
+| **Key-based root SSH** to the Move | the installer drives everything over SSH (`ssh-copy-id root@move.local`) |
+| **Wi-Fi already configured** in stock | there is no Ethernet on a Move; the installer copies your saved credentials across so the machine stays reachable |
+| **The RNBO runtime on the device** | `jack_move.so`, the native driver the whole instrument is built on, comes from there. It is **not** shipped in the bundle |
+
+The installer checks all three before it writes anything, and stops with a specific
+message rather than half-converting a machine.
+
+### What it does
+
+**Stage A — Armbian** (skipped if the Move is already converted). It resolves the bundle
+(a local `bundle/armbian/`, or the release asset, checksum-verified), shows you exactly
+what is about to happen, and waits for you to type `CONVERT`. Then it stages the bundle to
+`/data` — never `/tmp`, because stock's root partition is 463 MB and ~99% full — and runs
+the converter on the device, which:
+
+1. preserves what cannot be redistributed and what is yours: **`/opt/move`** (Ableton's own
+   software, copied from *your* device), your `authorized_keys`, and your Wi-Fi credentials
+   (translated from stock's ConnMan into NetworkManager, never printed);
+2. relocates your data into `/var/lib/move-data` and unpacks the Armbian rootfs onto p4;
+3. generates a **per-device** machine-id and SSH host keys — a bundle with a shared host
+   key baked in would be a real vulnerability;
+4. saves the stock boot configuration as `config.txt.stock-original` **and** as
+   `tryboot.txt` *before* overwriting anything, installs the kernel, dtb and overlays, and
+   rewrites `root=` in the cmdline to this card's own PARTUUID;
+5. reboots.
+
+The installer then waits for the machine to come back, drops the old SSH host key (it just
+changed), and confirms your `UserData` survived before going on.
+
+**Stage B — PoundHard.** Packages, the self-contained SC runtime, Csound, CDP, the
+controller, `ui.js` + phhost, `phgain` compiled *on the device* so it links the running
+`libjack`, the launcher, the sbin helpers and all systemd units. Then it verifies:
 
 ```
 == verify
@@ -204,30 +243,44 @@ compiles the volume client on the device) and prints a verification block at the
    display port           yes
 ```
 
-If any line reads anything other than `active` / `16` / `yes`, the install did not
-finish and the script says which stage failed rather than leaving you to find out from
-a blank screen.
+### Getting back to stock
 
-**What it does, in order:**
+```bash
+ssh root@move.local /usr/local/sbin/boot-stock
+```
 
-1. **Checks the target** — SSH reachability and the presence of `/dev/ablspi0.0`. It
-   refuses to run against a device that isn't the Move on Armbian, rather than half-installing.
-2. **Installs device packages** — `nodejs`, `gcc`/`libjack-dev` (to build the volume
-   client), `python3-jack-client`, `jack-example-tools`, `dnsmasq-base`.
-3. **Deploys PoundHard** — the self-contained SC runtime bundle (supernova, scsynth,
-   sclang, every UGen plugin, the class library), the Csound runtime, CDP, the Python
-   controller with vendored `python-osc`, the `.scd` engine files and the `run-*.sh`
-   launch scripts. RT file capabilities are re-asserted afterwards, because `chown`
-   clears them.
-4. **Deploys the UI** — `ui.js` and `module.json` unchanged, plus **phhost**, the Node
-   host that implements the API `ui.js` expects.
-5. **Compiles `phgain` on the device** — the JACK client that puts the Move's master
-   volume knob in front of the speaker.
-6. **Installs the launcher and systemd units** — the appliance menu, the shutdown
-   helper, the RT tuner and the JACK watchdog.
-7. **Disables Ableton's leftovers** (`move-launcher.service`, `move-web.service`) and
-   enables the new chain.
-8. **Verifies** — services active, JACK ports present, display port live.
+The RPi firmware honours `tryboot.txt` for **exactly one boot**, so this returns you to
+AbletonOS without touching the card; the next normal power cycle comes back to Armbian.
+This matters more than it looks: the instrument is built for a user with a severe sight
+impairment, for whom "just pop the SD card out and reflash it" is not a recovery
+procedure. Every step of the conversion is therefore reversible from the network.
+
+### Building and testing the bundle yourself
+
+The bundle is captured from a Move that already works, because that device is the only
+complete specification of the system — the kernel reproduces from source, the afternoon of
+fixes on top of it does not:
+
+```bash
+./armbian/build-bundle.sh <working-move-host>
+```
+
+It excludes, and verifies that it excludes, everything that must not be redistributed:
+Ableton's `/opt/move`, your data, the Wi-Fi PSK, SSH host keys and the machine-id.
+
+The conversion cannot be rehearsed on a converted device — once p4 carries the Armbian
+root, that machine is no longer a stock Move — so it is tested against a **synthetic** one:
+a loopback disk with the Move's real partition geometry, a stock-shaped p4, a stock
+`config.txt`, and the actual converter run against it unmodified.
+
+```bash
+./tests/run-convert-test.sh
+```
+
+It asserts that user data comes through byte-for-byte, that `/opt/move` and
+`authorized_keys` are carried across, that the Wi-Fi keyfile lands at mode 600 with the
+right SSID, that host keys are per-device, and that `tryboot.txt` really is the stock
+config.
 
 > After a controller change, exit PoundHard and re-enter it. The launcher reuses a
 > controller process that is already running, so an old one from a prior session
@@ -565,7 +618,12 @@ armbian/phgain/         phgain.c                    master-volume JACK client
 armbian/systemd/        jackd-move, phgain, move-launcher-menu, move-jack-watchdog, move-rt-tune
 armbian/sbin/           move-rt-tune.sh  move-jack-watchdog.sh  move-shutdown.sh  boot-stock
 armbian/boot/           config.txt.armbian  armbian-cmdline.txt  move-spidev0-off.dts
-install.sh              one-command deploy of the whole stack to a Move running Armbian
+armbian/build-bundle.sh capture a working Move into a redistributable Armbian bundle
+armbian/convert.sh      stock -> Armbian, in place, over the network (runs on the device)
+tests/                  convert-harness.sh + run-convert-test.sh — the conversion, tested
+                        against a synthetic stock card on a loopback disk
+bundle/armbian/         the built bundle (rootfs.tar.gz + boot payload) — not in git
+install.sh              ONE COMMAND: stock Move -> Armbian + PoundHard, or redeploy alone
 web/                    poundhard-logo.svg   (brand mark — also served by the web UI)
 ```
 
@@ -716,6 +774,27 @@ an angular, industrial typeface that suits the hard, percussion-centric aestheti
   full** (the partition is 2 GB; the filesystem inside it is not). `/data` has 54 GB.
 - **Never `saveproj` into a saved slot during a device test.** It overwrites the user's
   project, and it has already done so once.
+- **The conversion is one-way for p4, so it cannot be rehearsed on a converted device.**
+  Once the Armbian root is unpacked onto p4, that machine is no longer a stock Move, and
+  running the converter against it again would relocate the *rootfs* into `move-data`. The
+  converter is therefore tested against a synthetic card on a loopback disk, not by
+  round-tripping the real one.
+- **A bundle must not carry the machine it was built from.** Capturing a working device is
+  the only complete specification of the system, but the capture sweeps up things that must
+  never ship: the Wi-Fi PSK in the NetworkManager keyfile, the SSH host keys (shared across
+  installs, that is a real vulnerability), the machine-id (shared, and DHCP leases collide),
+  Ableton's proprietary `/opt/move`, and the user's own projects. `build-bundle.sh` excludes
+  all of it **and then greps the finished tarball to prove it did** — an exclude list that
+  silently stops matching is worse than no exclude list.
+- **`/opt/move` and `jack_move.so` come from the user's own device, never from us.** The
+  first is Ableton's proprietary software (WTABLE reads its factory sprites; shutdown calls
+  `MoveXmosPower`), and the second is the GPL native driver that lives in the device's RNBO
+  tree. The converter copies both off the machine it is converting, which is also why RNBO
+  is a hard prerequisite the installer checks for rather than works around.
+- **`root=` in the cmdline must be rewritten per card.** The bundle carries the cmdline from
+  the machine it was built on, and a PARTUUID identifies *that* card. The converter reads
+  the target's own PARTUUID with `blkid` and substitutes it — otherwise the first machine
+  the bundle is installed on boots, and every one after it hangs in `rootwait`.
 - **Do not disable the Move's update services** (`swupdate` / `UpdateDBusService`) to block
   auto-updates — `MoveControlModeHandler` hangs forever when they are absent and the device
   won't finish booting. This applies to the stock system; under Armbian they are gone anyway.
