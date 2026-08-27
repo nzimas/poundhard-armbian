@@ -847,6 +847,15 @@ an angular, industrial typeface that suits the hard, percussion-centric aestheti
   is 29 MB. That is the whole reason the bundle ships no initrd — the Move boots the kernel
   directly with `root=` by PARTUUID and ext4 built in, and a 20 MB initramfs we never load
   would not fit. The converter checks p1's free space against the kernel before it starts.
+- **A local Docker tag can be the wrong architecture, and `--platform` will not save you.**
+  On this machine `debian:trixie-slim` and `arm32v7/debian:trixie-slim` were the *same image
+  id* — the tag had been pointed at an armhf image by unrelated work — and Docker reuses a
+  local tag without consulting the registry, so `docker run --platform linux/arm64` still
+  came up `armv7l`. `move-bringup` declares `Architecture: arm64`, so the deb would have
+  been built 32-bit with nothing to say so until the Move failed to boot. The build names
+  the architecture in the image itself (`arm64v8/debian:trixie-slim`, a namespace that
+  cannot be anything else) **and** asserts `dpkg --print-architecture` inside the container
+  before doing any work. Neither guard is redundant: the first failure mode is invisible.
 - **Building the image locally is a licensing requirement, not a preference.** The build
   installs a firmware package extracted from the user's own Move, so the finished rootfs
   contains Ableton's `/opt/move`. That is fine on your machine for your device and

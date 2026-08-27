@@ -22,6 +22,12 @@ MOVE_HOST="${1:?usage: build-armbian.sh <move-host> [workdir]}"
 WORK="${2:-$HOME/.cache/poundhard-armbian-build}"
 PORT_REPO="${PH_PORT_REPO:-https://github.com/djhardrich/move-spi-armbian.git}"
 ARMBIAN_REPO="${PH_ARMBIAN_REPO:-https://github.com/armbian/build.git}"
+# Arch-explicit on purpose. A local "debian:trixie-slim" tag may well point at an
+# armhf image -- docker reuses a local tag without consulting the registry, and
+# --platform does NOT override that -- and the debs would come out 32-bit with
+# nothing to say so until the Move failed to boot. The arm64v8 namespace cannot
+# be anything else, and the containers assert their own architecture besides.
+DEB_IMAGE="${PH_DEB_IMAGE:-arm64v8/debian:trixie-slim}"
 
 b()   { printf '\n\033[1m== %s\033[0m\n' "$*"; }
 info(){ printf '   %s\n' "$*"; }
@@ -115,10 +121,12 @@ else
         -v "$PORT":/repo:ro \
         -v "$BUILD/userpatches/overlay/extras":/out \
         -v "$HOME/.ssh":/root/.ssh:ro \
-        debian:trixie-slim bash -c '
+        "$DEB_IMAGE" bash -c '
             set -e
             export DEBIAN_FRONTEND=noninteractive
             apt-get update -qq >/dev/null
+            [ "$(dpkg --print-architecture)" = arm64 ] || {
+                echo "container is $(dpkg --print-architecture), not arm64" >&2; exit 1; }
             apt-get install -y -qq --no-install-recommends \
                 rsync fakeroot dpkg-dev openssh-client ca-certificates >/dev/null
             cp -r /repo /work && cd /work
@@ -136,12 +144,15 @@ else
     docker run --rm \
         -v "$PORT":/port \
         -v "$BUILD/userpatches/overlay/extras":/out \
-        debian:trixie-slim bash -c '
+        "$DEB_IMAGE" bash -c '
             set -e
             export DEBIAN_FRONTEND=noninteractive
             apt-get update -qq >/dev/null
+            [ "$(dpkg --print-architecture)" = arm64 ] || {
+                echo "container is $(dpkg --print-architecture), not arm64" >&2; exit 1; }
             apt-get install -y -qq --no-install-recommends \
-                build-essential fakeroot dpkg-dev debhelper device-tree-compiler >/dev/null
+                build-essential fakeroot dpkg-dev debhelper device-tree-compiler \
+                dh-dkms dkms >/dev/null
             cp -r /port /build && cd /build/move-bringup
             dpkg-buildpackage -us -uc -b
             cp ../move-bringup_*.deb /out/
