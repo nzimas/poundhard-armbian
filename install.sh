@@ -206,6 +206,24 @@ $SSH 'export DEBIAN_FRONTEND=noninteractive
           echo "   all present"
       fi' || die "package install failed"
 
+say "native JACK driver"
+# jack_move.so owns /dev/ablspi0.0 -- audio, the screen, the pads, every LED. It
+# is the one component PoundHard cannot ship: built from Ableton's own move-spi
+# source, distributed inside the RNBO runtime, carrying no licence marking. It
+# lives in PoundHard's tree so that RNBO -- a 153MB third-party takeover that has
+# nothing to do with this instrument -- can be deleted and never reinstalled.
+$SSH "mkdir -p $PH/lib/jack
+      if [ -f $PH/lib/jack/jack_move.so ]; then
+          echo '   already in PoundHard'\''s tree'
+      elif [ -f /data/UserData/rnbo/lib/jack/jack_move.so ]; then
+          cp -a /data/UserData/rnbo/lib/jack/jack_move.so $PH/lib/jack/jack_move.so
+          echo '   migrated out of the RNBO tree — RNBO can now be removed'
+      else
+          echo '   MISSING' >&2; exit 1
+      fi" || die "jack_move.so is nowhere on this device.
+   It is the native Move JACK driver and ships inside the RNBO runtime. Install
+   RNBO on the Move once to obtain it; it can be deleted immediately afterwards."
+
 say "PoundHard controller + engine"
 $SSH "mkdir -p $PH/controller $PH/controller/vendor $PH/sc $PH/logs $PH/ipc"
 tar $TARFLAGS -C "$HERE/controller" -czf - poundhard | $SSH "tar -C $PH/controller -xzf -"

@@ -1,14 +1,19 @@
 [Unit]
 Description=Move master gain stage (software volume for the master knob)
-After=sound.target
-Wants=move-rt-tune.service
+After=sound.target jackd-move.service
+Wants=move-rt-tune.service jackd-move.service
+# phgain exits when the JACK server goes away and is restarted to reconnect. If
+# jackd is slow to come back, systemd's default rate limit (5 starts in 10s)
+# would give up PERMANENTLY and leave the master knob dead with the unit shown
+# as "failed". Retry indefinitely instead.
+StartLimitIntervalSec=0
 
 [Service]
 Type=simple
 Environment=LD_LIBRARY_PATH=
 ExecStart=/opt/phhost/phgain
 Restart=always
-RestartSec=3
+RestartSec=2
 
 [Install]
 WantedBy=multi-user.target

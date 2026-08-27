@@ -9,29 +9,21 @@
 # library + Extensions.
 set -e
 PH=/data/UserData/poundhard
-RNBO=/data/UserData/rnbo
-# The Schwung menu launches us with HOME unset; sclang then tries to mkdir
+# A launch from the appliance menu has HOME unset; sclang then tries to mkdir
 # /.local/share/SuperCollider (filesystem root) and fails -> Server.default is
-# nil -> the engine never boots. Point HOME at an ableton-writable dir.
+# nil -> the engine never boots. Point HOME at a writable dir.
 export HOME=/data/UserData
 # NOTE: this only helps sclang. scsynth/supernova/jackd carry RT file capabilities, and
 # glibc DISCARDS LD_LIBRARY_PATH for a capability-carrying binary — they find their
 # libraries through the RPATH baked into them (patched at bundle time to $PH/lib).
-export LD_LIBRARY_PATH=$PH/lib:$RNBO/lib
-# The shadow driver comes from Schwung (a hard prerequisite); fall back to RNBO's copy.
-# Audio backend. "shadow" attaches to a shm segment published by Ableton's
-# stack (so it REQUIRES MoveOriginal running). "move" is the native driver
-# that owns /dev/ablspi0.0 directly - no Ableton needed.
+export LD_LIBRARY_PATH=$PH/lib
+# "move" is the native driver that owns /dev/ablspi0.0 directly. It lives in
+# PoundHard's own tree: it used to be loaded out of the RNBO takeover's install,
+# which made a 153MB third-party package a hard dependency for one 422KB file
+# that has nothing to do with it. ("shadow" was the Schwung-era backend that
+# attached to Ableton's shm segment; there is no Ableton to attach to any more.)
 export PH_JACK_DRIVER="${PH_JACK_DRIVER:-move}"
-
-# The driver dir must actually CONTAIN the requested driver. Schwung ships
-# only jack_shadow.so; jack_move.so lives in the RNBO tree.
-if [ "$PH_JACK_DRIVER" = move ]; then
-    JACK_DRIVER_DIR=$RNBO/lib/jack
-else
-    JACK_DRIVER_DIR=/data/UserData/schwung/lib/jack
-    [ -d "$JACK_DRIVER_DIR" ] || JACK_DRIVER_DIR=$RNBO/lib/jack
-fi
+JACK_DRIVER_DIR=$PH/lib/jack
 if [ ! -f "$JACK_DRIVER_DIR/jack_$PH_JACK_DRIVER.so" ]; then
     echo "[engine] FATAL: jack_$PH_JACK_DRIVER.so not in $JACK_DRIVER_DIR" >&2
     exit 1
@@ -66,20 +58,23 @@ export CONTROLLER_HOST=127.0.0.1
 export CONTROLLER_PORT=57140
 export PATH=$PH/bin:$PATH
 LOGS=$PH/logs; mkdir -p "$LOGS"
-JACKLOG=$LOGS/jackd.log; ENGLOG=$LOGS/engine.log
+ENGLOG=$LOGS/engine.log
 
 echo "[engine] starting jackd -R -d $PH_JACK_DRIVER (realtime)"
 # Realtime audio chain — -R -P70 puts jackd on SCHED_FIFO; libjack then promotes
 # scsynth's audio callback thread to RT too (scsynth has cap_sys_nice). Needs
 # cap_sys_nice+cap_ipc_lock on the jackd binary. Priority 70 stays BELOW the
 # SPI/IRQ kernel threads (chrt 90/91) so the DAC/display path is never starved.
-# PoundHard ships its own jackd; RNBO's is only a fallback for older installs. Whichever
-# is already RUNNING wins — the shadow JACK is shared with the rest of the box.
-JACKBIN=$PH/bin/jackd
-[ -x "$JACKBIN" ] || JACKBIN=$RNBO/bin/jackd
-pgrep -f "jackd -R" >/dev/null 2>&1 || { "$JACKBIN" -R -P 70 -d "$PH_JACK_DRIVER" > "$JACKLOG" 2>&1 & sleep 2; }
-[ "$PH_JACK_DRIVER" = shadow ] && grep -q "attached to shared memory" "$JACKLOG" 2>/dev/null && echo "[engine] shadow attached"
-[ "$PH_JACK_DRIVER" = move ] && echo "[engine] native move driver (no Ableton)"
+# Under Armbian jackd belongs to jackd-move.service, and it is not merely the
+# audio server: it owns /dev/ablspi0.0, which means the screen, the pads and every
+# LED go through it. It outlives any one appliance. The engine must therefore
+# never start, restart or adopt one — it checks that the system's server is there
+# and refuses to run if it is not, rather than racing a second jackd against it.
+if ! pgrep -x jackd >/dev/null 2>&1; then
+    echo "[engine] FATAL: jackd is not running — start jackd-move.service" >&2
+    exit 1
+fi
+echo "[engine] jackd present ($PH_JACK_DRIVER driver, no Ableton)"
 
 echo "[engine] starting sclang (ph-boot.scd) — pinned to cores 0-2"
 taskset 0x7 $PH/bin/sclang -l $PH/share/sclang_conf.yaml $PH/sc/ph-boot.scd \

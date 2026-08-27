@@ -76,6 +76,21 @@ static void *ctrl_thread(void *arg)
 
 static void on_signal(int s) { (void)s; running = 0; }
 
+/*
+ * jackd owns /dev/ablspi0.0, so it gets restarted for reasons that have nothing
+ * to do with us (the watchdog, a reinstall). Without this, losing the server
+ * leaves the process ALIVE but with no ports: systemd sees Restart=always
+ * satisfied because nothing exited, and the master knob silently stops working
+ * with every service reporting "active". Exit instead, and let systemd
+ * reconnect us.
+ */
+static void on_jack_shutdown(void *arg)
+{
+    (void)arg;
+    fprintf(stderr, "phgain: JACK server went away — exiting so systemd restarts us\n");
+    _exit(1);
+}
+
 int main(void)
 {
     jack_status_t st;
@@ -89,6 +104,7 @@ int main(void)
     if (!in_l || !in_r || !out_l || !out_r) { fprintf(stderr, "phgain: port register failed\n"); return 1; }
 
     jack_set_process_callback(client, process, NULL);
+    jack_on_shutdown(client, on_jack_shutdown, NULL);
     if (jack_activate(client)) { fprintf(stderr, "phgain: activate failed\n"); return 1; }
 
     jack_connect(client, "phgain:out_1", "system:playback_1");

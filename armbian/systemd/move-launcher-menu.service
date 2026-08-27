@@ -5,7 +5,7 @@ Wants=move-rt-tune.service
 
 [Service]
 Type=simple
-Environment=LD_LIBRARY_PATH=/data/UserData/poundhard/lib:/data/UserData/rnbo/lib
+Environment=LD_LIBRARY_PATH=/data/UserData/poundhard/lib
 WorkingDirectory=/opt/move-launcher
 ExecStart=/usr/bin/python3 -u /opt/move-launcher/launcher.py
 KillMode=process

@@ -75,8 +75,11 @@ touch /dev/ablspi0.0 2>/dev/null || true
 printf '# stock ableton config\narm_64bit=1\nkernel=kernel8.img\n' > /mnt/p1x/config.txt
 umount /mnt/p1x
 
-USER_BYTES_BEFORE=$(du -sb /data/UserData | cut -f1)
-echo "   /data/UserData = $USER_BYTES_BEFORE bytes before conversion"
+# Measured excluding UserData/poundhard: the conversion deliberately CREATES that
+# tree (it is where the native driver is migrated to), so counting it would make
+# a correct conversion look like it had altered the user's data.
+USER_BYTES_BEFORE=$(du -sb --exclude=poundhard /data/UserData | cut -f1)
+echo "   /data/UserData = $USER_BYTES_BEFORE bytes before conversion (excl. poundhard)"
 
 echo "== staging the bundle"
 mkdir -p /data/.ph-convert
@@ -93,12 +96,23 @@ echo
 echo "== assertions"
 [ -d /data/var/lib/move-data/UserData/Sets ] \
   && ok "user data relocated to /var/lib/move-data" || no "user data NOT relocated"
-USER_BYTES_AFTER=$(du -sb /data/var/lib/move-data/UserData 2>/dev/null | cut -f1 || echo 0)
+USER_BYTES_AFTER=$(du -sb --exclude=poundhard /data/var/lib/move-data/UserData 2>/dev/null | cut -f1 || echo 0)
 [ "$USER_BYTES_AFTER" = "$USER_BYTES_BEFORE" ] \
-  && ok "user data intact byte-for-byte ($USER_BYTES_AFTER)" \
+  && ok "pre-existing user data intact byte-for-byte ($USER_BYTES_AFTER)" \
   || no "user data changed size: $USER_BYTES_BEFORE -> $USER_BYTES_AFTER"
 [ -f /data/var/lib/move-data/UserData/rnbo/lib/jack/jack_move.so ] \
-  && ok "jack_move.so survived" || no "jack_move.so lost"
+  && ok "the original rnbo tree is left untouched" || no "rnbo tree altered"
+# The whole point: the driver is copied into PoundHard's own tree, so the RNBO
+# takeover can be deleted afterwards and nothing in the system points into it.
+MIG=/data/var/lib/move-data/UserData/poundhard/lib/jack/jack_move.so
+if [ -f "$MIG" ]; then
+    ok "driver migrated into PoundHard's tree"
+    A=$(sha256sum "$MIG" | cut -d" " -f1)
+    B=$(sha256sum /data/var/lib/move-data/UserData/rnbo/lib/jack/jack_move.so | cut -d" " -f1)
+    [ "$A" = "$B" ] && ok "migrated driver is byte-identical" || no "driver copy differs"
+else
+    no "driver NOT migrated — the stack would still depend on RNBO"
+fi
 [ -d /data/usr/bin ] && [ -d /data/etc/systemd ] \
   && ok "Armbian rootfs unpacked onto p4" || no "rootfs not unpacked"
 [ -f /data/opt/move/Dsp/Vector/Sprites/basic.bin ] \

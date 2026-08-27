@@ -203,7 +203,7 @@ never written to, which is what makes the escape hatch work.
 |---|---|
 | **Key-based root SSH** to the Move | the installer drives everything over SSH (`ssh-copy-id root@move.local`) |
 | **Wi-Fi already configured** in stock | there is no Ethernet on a Move; the installer copies your saved credentials across so the machine stays reachable |
-| **The RNBO runtime on the device** | `jack_move.so`, the native driver the whole instrument is built on, comes from there. It is **not** shipped in the bundle |
+| **`jack_move.so` present once** | the native driver. It is not shipped in the bundle, and it ships inside the RNBO runtime rather than with Ableton's own software — so RNBO has to have been installed **once**, purely as the source of that one file. The installer copies it into PoundHard's tree, after which **RNBO can be deleted and is never needed again** |
 
 The installer checks all three before it writes anything, and stops with a specific
 message rather than half-converting a machine.
@@ -322,7 +322,7 @@ matters: this instrument is built for a user with a severe sight impairment, and
 
 ### Audio and control: `jackd -d move`
 
-The native driver `jack_move.so` (GPL, from the RNBO tree) owns `/dev/ablspi0.0` and is
+The native driver `jack_move.so` owns `/dev/ablspi0.0` and is
 the single point of contact with the hardware. Started as `jackd -R -P 70 -d move`, it
 exposes not just audio but **the whole control surface** as JACK ports:
 
@@ -774,11 +774,20 @@ an angular, industrial typeface that suits the hard, percussion-centric aestheti
   shell kills its own session and the thing you were aiming at survives — repeatedly, and it
   looks like the command did nothing. Bracket the pattern (`bin/sclan[g]`) and check with
   `ps` first.
-- **`set -e` and `&&`/`||` do not mix in POSIX sh.** `cmd && x` at statement level returns
-  non-zero when the condition is false and aborts the whole script under `set -e`; and
-  `||`/`&&` are equal precedence and left-associative, so `a || b && c` is not what it looks
-  like. A wait loop written that way exited immediately, and a retry loop gave up after
-  attempt 1. Write them as explicit `if` blocks and append `|| true` where a failure is fine.
+- **`||` and `&&` are equal precedence and left-associative**, so `a || b && c` does not
+  mean what it looks like. A wait loop written that way exited immediately, and `set -e`
+  ended a retry loop after attempt 1. Write them as explicit `if` blocks and append
+  `|| true` where a failure is fine. (What `set -e` does *not* do is abort on a failing
+  AND-OR list: `set -e; false && true; echo ok` prints `ok`, because errexit is suppressed
+  for every command in such a list. An earlier revision of this file claimed otherwise —
+  worth testing rather than reasoning about, which is how the claim was caught.)
+- **A JACK client that loses its server can stay "active" forever.** `phgain` had no
+  `jack_on_shutdown` callback, so restarting `jackd` left the process alive with **no ports
+  in the graph**: `systemctl is-active` said `active`, `Restart=always` never fired because
+  nothing exited, and the master knob silently stopped working. It calls `_exit(1)` on
+  shutdown now so systemd reconnects it — and the unit sets `StartLimitIntervalSec=0`,
+  because the default rate limit (5 starts in 10 s) would otherwise give up *permanently*
+  while waiting for a slow server. Verify a client by its **ports**, not its unit state.
 - **Don't write scratch to `/tmp` on the device.** The root filesystem is **463 MB at ~99%
   full** (the partition is 2 GB; the filesystem inside it is not). `/data` has 54 GB.
 - **Never `saveproj` into a saved slot during a device test.** It overwrites the user's
@@ -797,9 +806,15 @@ an angular, industrial typeface that suits the hard, percussion-centric aestheti
   silently stops matching is worse than no exclude list.
 - **`/opt/move` and `jack_move.so` come from the user's own device, never from us.** The
   first is Ableton's proprietary software (WTABLE reads its factory sprites; shutdown calls
-  `MoveXmosPower`), and the second is the GPL native driver that lives in the device's RNBO
-  tree. The converter copies both off the machine it is converting, which is also why RNBO
-  is a hard prerequisite the installer checks for rather than works around.
+  `MoveXmosPower`), and the second is the native driver, which is distributed inside the
+  RNBO runtime. The converter copies both off the machine it is converting.
+- **A dependency on a *path* is not a dependency on a *package*.** The stack loaded
+  `jack_move.so` straight out of `/data/UserData/rnbo/`, which made a 153 MB third-party
+  takeover look like a hard requirement. It never was: the driver has no `RUNPATH` into
+  that tree and links only against system libraries, and `/proc/<jackd>/maps` showed the
+  running server using PoundHard's **own** `libjackserver` and exactly one file — the
+  driver — from RNBO. It is copied into `$PH/lib/jack/` at install time now, and RNBO can
+  be deleted. Check what a process actually has mapped before believing a path.
 - **`root=` in the cmdline must be rewritten per card.** The bundle carries the cmdline from
   the machine it was built on, and a PARTUUID identifies *that* card. The converter reads
   the target's own PARTUUID with `blkid` and substitutes it — otherwise the first machine
@@ -857,7 +872,7 @@ To the author's best knowledge:
 | **softcut-lib** (github.com/monome/softcut-lib) | the tape engine under **COMPASS**, built as the `PhSoftcut` UGen (prebuilt `.so` shipped) | **GPL-3.0** (monome) |
 | **Compass** (github.com/oliviercreurer/compass) by Olivier Creurer, w/ contributions from @justmat + @gonecaving | `controller/compass/compass.lua` is vendored **verbatim** and executed, not reimplemented. The COMPASS modifier built on it was **retired** — it never reproduced its input convincingly on this hardware — and STROBE now occupies that pad. The script and its softcut infrastructure remain in the tree, unused, and the attribution stands. | no licence file upstream; © its author, vendored unmodified with attribution |
 | **Lua** (5.4) | the interpreter COMPASS runs that script under — **shipped in the runtime bundle** (`move/bundle/poundhard-lua.tar.gz`) | MIT |
-| **`jack_move.so`** — the Move JACK driver, from the RNBO tree | the native backend that owns `/dev/ablspi0.0` and carries audio, the display and all MIDI. **Not part of this repo** — it is taken from the device. | **GPL** |
+| **`jack_move.so`** — the Move JACK driver | the native backend that owns `/dev/ablspi0.0` and carries audio, the display and all MIDI. **Not part of this repo and not redistributed** — it is copied from the device it is installed on. Its build paths name `ableton/move/move-spi`, so it is compiled from Ableton's own source and distributed inside the RNBO runtime; the binary carries **no licence marking** and no licence file accompanies it, so no licence is asserted for it here. | unmarked; © its authors |
 | **Armbian** (trixie, `6.18.x-current-bcm2711` PREEMPT_RT) | the operating system the whole instrument runs on — **not part of this repo** | GPL-2.0 (kernel) + per-package licences |
 | **Node.js** | the runtime `phhost` executes `ui.js` under | MIT |
 | **Tamzen font** (8×16) | the large screen typeface in `armbian/phhost/fonts.mjs` | free / permissive (see upstream) |

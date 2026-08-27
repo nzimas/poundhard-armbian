@@ -61,12 +61,24 @@ fi
 [ -f "$STAGE/boot/armbian-Image" ] || die "bundle missing: $STAGE/boot/armbian-Image"
 
 # jack_move.so is the native driver the whole instrument is built on, and it is
-# NOT ours to redistribute -- it has to already be on this device.
-JACKDRV=/data/UserData/rnbo/lib/jack/jack_move.so
-[ -f "$JACKDRV" ] || die "missing $JACKDRV
-   The native Move JACK driver comes from the RNBO runtime on your device and is
-   not shipped in this bundle. Install RNBO on the Move (stock) first."
-info "jack_move.so present"
+# the one piece we cannot supply: it was built from Ableton's own move-spi source
+# and is distributed inside the RNBO runtime, with no licence marking of any kind.
+# So it has to already be on this device -- but only as a SOURCE. It gets copied
+# into PoundHard's own tree below, after which RNBO can be deleted and is never
+# needed again. Nothing in the running system points into it.
+JACKDRV=""
+for c in /data/UserData/poundhard/lib/jack/jack_move.so \
+         /data/UserData/rnbo/lib/jack/jack_move.so; do
+    if [ -f "$c" ]; then JACKDRV="$c"; break; fi
+done
+[ -n "$JACKDRV" ] || die "cannot find jack_move.so on this device.
+   It is the native Move JACK driver, and it ships inside the RNBO runtime rather
+   than with Ableton's own software. Looked in:
+     /data/UserData/poundhard/lib/jack/   (where PoundHard keeps it)
+     /data/UserData/rnbo/lib/jack/        (where RNBO installs it)
+   Install RNBO on the stock Move once to obtain the file; it can be removed
+   again immediately after this conversion."
+info "native JACK driver found: $JACKDRV"
 
 for t in tar gzip python3 ssh-keygen blkid findmnt mountpoint df awk install; do
     command -v "$t" >/dev/null 2>&1 || die "stock system is missing '$t', which the
@@ -110,6 +122,13 @@ for f in /usr/share/dbus-1/system-services/com.ableton.*; do
 done
 [ -e /etc/dbus-1/system.d/move.conf ] && cp -a /etc/dbus-1/system.d/move.conf "$PRESERVE/dbus/system.d/" || true
 info "ableton dbus service files preserved"
+
+# Put the driver where PoundHard will look for it. /data/UserData/poundhard is
+# relocated with everything else below, so it arrives in the new system intact --
+# and from then on nothing references the RNBO tree at all.
+mkdir -p /data/UserData/poundhard/lib/jack
+cp -a "$JACKDRV" /data/UserData/poundhard/lib/jack/jack_move.so
+info "driver installed into PoundHard's own tree (RNBO no longer needed)"
 
 # SSH access. Losing this loses the machine: there is no Ethernet on a Move.
 mkdir -p "$PRESERVE/ssh"
