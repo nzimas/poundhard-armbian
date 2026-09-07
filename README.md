@@ -752,6 +752,25 @@ an angular, industrial typeface that suits the hard, percussion-centric aestheti
   `jackd`** — under Armbian that is not a shared audio server it can restart at will, it is
   the process driving the screen, the pads and the LEDs. `stop-stack.sh` kills `sclang`,
   `scsynth`, `supernova` and `csound`, and deliberately leaves `jackd` alone.
+- **SIGKILL on a JACK client wedges the SERVER.** This is what "the system froze
+  after I exited cleanly" was, every time. `stop-stack.sh` ended the stack with
+  `killall -9 sclang scsynth supernova csound`; supernova and csound are JACK clients,
+  and SIGKILL gives them no chance to unregister, after which the server refuses new
+  client connections while it reaps the corpses. `jackd` is still alive and still owns
+  `/dev/ablspi0.0`, so the screen, pads and jogwheel are dead while every service reports
+  `active` — `jack_lsp` returns nothing at all. The JACK watchdog then recovers it by
+  restarting `jackd`, which is the right cure, but three strikes at 30 s means the user
+  stares at a frozen instrument for ~90 seconds first. Teardown now asks with SIGTERM,
+  waits up to 5 s for the clients to actually leave, and only insists on what remains.
+- **Kill the launcher before the thing it launches, or it starts another one.**
+  `run-stack.sh` backgrounds a subshell that waits up to 120 s for the engine to report
+  ready and then runs `run-csound.sh`, which itself retries four times. Exiting inside
+  that window killed `csound` and got a fresh one moments later — still registered, still
+  holding its 34 ports. The teardown kills the launcher shells first. And it does so
+  **skipping its own pid and its parent**: a bracketed `pkill -f` pattern stops the match
+  hitting the script file, but not a caller whose command line happens to mention it,
+  which over ssh means killing the session you are working in. That is not hypothetical —
+  it happened while testing this very fix.
 - **A process the teardown forgets is worse than one that dies.** `stop-stack.sh` used to
   kill `sclang`, `scsynth` and `jackd` but neither `supernova` nor `csound`. A surviving
   supernova makes the next boot attach to an **orphan server** — `ready` true, zero nodes,
