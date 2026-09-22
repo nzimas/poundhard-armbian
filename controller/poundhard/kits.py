@@ -247,7 +247,7 @@ def gen_kit(seed: int | None = None) -> dict:
 # essentials that keep a voice idiomatic.
 # --------------------------------------------------------------------------- #
 PALETTE_ENGINES = ["DRUM", "FM7", "BUCHLOID", "MOLLY", "RINGS", "BEN", "NOIZEOP",
-                   "ICARUS", "PLAITS", "SHAKER", "MEMBRANE", "MALLET", "BOWED",
+                   "ICARUS", "PLAITS", "SHAKER", "MODAL", "MALLET", "BOWED",
                    "PLUCK", "CHAOS", "WTABLE", "BYTEBEAT", "SAMPLE", "CSOUND",
                    "JOLT"]
 # TUBE was pad 15 until it was MERGED INTO PLUCK: both were waveguides fired by a noise
@@ -547,26 +547,42 @@ _SHAKER_WEIGHTS = {"SHK MARACA": 3, "SHK CABASA": 2, "SHK SEKERE": 2, "SHK GUIRO
 
 
 # --------------------------------------------------------------------------- #
-# MEMBRANE (MembraneCircle) — struck-membrane roles: tom / frame drum / gong. Note
-# shifts tension (pitch); `loss` sets the ring time. (tension, loss, tone, note).
+# MODAL (PhModal, crispinha's modal synth) — materials. The spectrum is the material:
+# how many modes, how far from harmonic, how steeply they fall away and how long they
+# ring. Struck materials dominate (this is a percussion instrument); the bowl and the buzz
+# hold their exciter open for colour. The divider is an index into MODAL_DIVIDERS
+# (1,2,3,4,6,8): the buzz stays on odd ones, where a square drives the modes on resonance.
+# (name, exciter, modes, inharmonic, stretch, falloff, decay, notes, octave, extra bands)
 # --------------------------------------------------------------------------- #
-_MEMBRANE_SPEC = [
-    ("MEM TOM",   (0.04, 0.1),    (0.997, 0.9995),   (0.3, 0.7),  ((0, 3, 5, 7), 0)),
-    ("MEM FRAME", (0.02, 0.06),   (0.994, 0.999),    (0.4, 0.85), ((0, 5, 7), 12)),
-    ("MEM GONG",  (0.008, 0.03),  (0.9996, 0.99996), (0.2, 0.6),  ((0, 7), -12)),
+_MODAL_SPEC = [
+    ("MOD WOOD",  0, (6, 14),  (0.02, 0.12), (0.95, 1.1), (1.2, 2.0), (0.15, 0.5), (0, 3, 5, 7), 0, {}),
+    ("MOD METAL", 0, (24, 40), (0.2, 0.5),   (1.0, 1.3),  (0.3, 0.8), (1.0, 3.0),  (0, 5, 7), 0, {}),
+    ("MOD GLASS", 0, (10, 20), (0.0, 0.05),  (1.3, 1.6),  (0.6, 1.2), (0.8, 2.2),  (0, 7), 12, {}),
+    ("MOD BELL",  0, (16, 30), (0.05, 0.25), (1.1, 1.4),  (0.4, 0.9), (1.5, 3.0),  (0, 7), 12, {}),
+    ("MOD GONG",  0, (30, 40), (0.3, 0.5),   (0.9, 1.1),  (0.3, 0.6), (2.0, 3.0),  (0, 7), -12, {}),
+    ("MOD BOWL",  1, (8, 20),  (0.0, 0.1),   (1.0, 1.3),  (0.8, 1.5), (1.0, 2.5),  (0, 5, 7), 0,
+     {"modal.hold": (0.2, 0.6), "modal.attack": (0.02, 0.12), "modal.release": (0.3, 1.0),
+      "modal.fmix": (0.0, 0.4)}),
+    ("MOD BUZZ",  3, (16, 40), (0.0, 0.08),  (0.95, 1.1), (0.5, 1.2), (0.3, 1.2),  (0, 3, 7), -12,
+     {"modal.hold": (0.05, 0.3), "modal.attack": (0.001, 0.02), "modal.release": (0.05, 0.3),
+      "modal.exrate": (2, 2)}),   # divider 3: odd, so the square drives the modes on resonance
 ]
 
 
-def _membrane_role(spec) -> Role:
-    name, tns, loss, tone, note = spec
-    return Role(name, "MEMBRANE", note_choices=note[0], octave=note[1],
-                bands={"membrane.tension": tns, "membrane.loss": loss,
-                       "membrane.tone": tone, "membrane.strike": (0.1, 0.8)}, vel=(0.8, 1.05))
+def _modal_role(spec) -> Role:
+    name, exciter, modes, inh, stretch, fall, decay, notes, octave, extra = spec
+    bands = {"modal.modes": modes, "modal.detune": inh, "modal.expo": stretch,
+             "modal.falloff": fall, "modal.decay": decay}
+    bands.update(extra)
+    return Role(name, "MODAL", note_choices=notes, octave=octave,
+                fixed={"modal.exciter": float(exciter), "modal.fold": 0.0},
+                bands=bands, vel=(0.8, 1.05))
 
 
-MEMBRANE_ROLES: dict[str, Role] = {s[0]: _membrane_role(s) for s in _MEMBRANE_SPEC}
-PALETTE_ROLES["MEMBRANE"] = MEMBRANE_ROLES["MEM TOM"]
-_MEMBRANE_WEIGHTS = {"MEM TOM": 3, "MEM FRAME": 2, "MEM GONG": 1}
+MODAL_ROLES: dict[str, Role] = {s[0]: _modal_role(s) for s in _MODAL_SPEC}
+PALETTE_ROLES["MODAL"] = MODAL_ROLES["MOD WOOD"]
+_MODAL_WEIGHTS = {"MOD WOOD": 3, "MOD METAL": 3, "MOD GLASS": 2, "MOD BELL": 2,
+                  "MOD GONG": 1, "MOD BOWL": 1, "MOD BUZZ": 1}
 
 
 # --------------------------------------------------------------------------- #
@@ -1114,10 +1130,10 @@ def gen_palette_voice(engine: str, rng: random.Random | None = None,
         names = list(_SHAKER_WEIGHTS)
         name = rng.choices(names, weights=[_SHAKER_WEIGHTS[n] for n in names])[0]
         return gen_voice(SHAKER_ROLES[name], rng)
-    if engine == "MEMBRANE":
-        names = list(_MEMBRANE_WEIGHTS)
-        name = rng.choices(names, weights=[_MEMBRANE_WEIGHTS[n] for n in names])[0]
-        return gen_voice(MEMBRANE_ROLES[name], rng)
+    if engine == "MODAL":
+        names = list(_MODAL_WEIGHTS)
+        name = rng.choices(names, weights=[_MODAL_WEIGHTS[n] for n in names])[0]
+        return gen_voice(MODAL_ROLES[name], rng)
     if engine == "MALLET":
         names = list(_MALLET_WEIGHTS)
         name = rng.choices(names, weights=[_MALLET_WEIGHTS[n] for n in names])[0]

@@ -33,7 +33,7 @@ from .tracks import N_STEPS, MAX_STEPS
 # not just the timbre). DRUM/noise engines take pitch as colour, so they get a much
 # narrower treatment.
 _PITCHED = {"FM7", "BUCHLOID", "MOLLY", "RINGS", "PLAITS", "MALLET", "BOWED", "PLUCK",
-            "TUBE", "MEMBRANE", "ICARUS", "WTABLE"}
+            "TUBE", "MODAL", "ICARUS", "WTABLE"}
 # engines that are texture rather than line: they get sparse, wide, slow material
 _TEXTURE = {"NOIZEOP", "CHAOS", "BEN", "BYTEBEAT", "ICARUS", "BUCHLOID"}
 

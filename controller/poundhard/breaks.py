@@ -30,7 +30,7 @@ N_STEPS = 16
 
 # Engines that read as rhythm section rather than melody. A break needs to know what the
 # pulse IS before it can decide what to take away.
-_DRUMISH = {"DRUM", "MEMBRANE", "SHAKER"}
+_DRUMISH = {"DRUM", "MODAL", "SHAKER"}
 
 
 def _density(tr) -> float:

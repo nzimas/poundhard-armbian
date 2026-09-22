@@ -337,12 +337,22 @@ track — for reasons particular to each, explained there.
   tilts the resonance. The generator picks a model first, then targets its parameters to
   that instrument (see `kits._SHAKER_SPEC`). STK's output is quiet, so the voice applies
   a fixed output boost to sit at engine level.
-- **MEMBRANE** — a struck **2D-waveguide membrane** (`MembraneCircle`, from sc3-plugins):
-  tunable drums, frame drums, warped skins, gongs. A short filtered-noise **strike**
-  excites the mesh; `tension` sets the pitch/character and `loss` the ring time — so the
-  note tunes the drum along a tom→gong continuum. It frees on silence (the membrane's own
-  decay) with a hard time cap, so long gong rings land but nothing leaks. Three targeted
-  roles (tom / frame / gong) drive the generator.
+- **MODAL** — a **modal resonator bank** (crispinha's [modal synthesiser](https://github.com/crispinha/modal-synth),
+  as the native `PhModal` UGen): an **exciter** through up to **forty resonators tuned as a
+  spectrum** — the sound of a struck or blown material. The spectrum *is* the material:
+  **Modes** (how many), **Inharmonic** and **Stretch** (how far from harmonic they sit),
+  **Falloff** (how steeply the upper modes fade) and **Decay** (how long they ring).
+  **Exciter** picks what drives the bank: **strike** (a single hit — rings out on its own),
+  **noise** (blown), **pulses** and **square** (a buzzing drive, locked to a whole-number
+  **Divider** of the note, because they only reach the modes on one), and **chirp** (a
+  sweep). A held exciter stays open for **Hold** seconds, then releases over **Release**.
+  **Fold** can turn the spectrum back on itself (undertones, or mirrored at **Fold Point**),
+  and a **Vowel** filter can colour it. The voice **levels itself**: each material and each
+  exciter is measured and brought to the same loudness, and a soft limiter bends rather
+  than clips — so a rolled material never jumps out of the mix. Seven targeted materials
+  drive the generator: wood, metal, glass, bell, gong (struck), a blown bowl and a
+  square-driven buzz. *MODAL replaced MEMBRANE on 2026-09-22; a MEMBRANE track in an older
+  project loads as a default MODAL, ready to re-roll.*
 - **MALLET** — **STK ModalBar** (`StkModalBar`, from sc3-plugins): struck modal bars —
   marimba, vibraphone, agogo, wood block, reso, beats/bells. Pitched by the note (`freq`
   in Hz); one strike at spawn and a perc amp envelope sets how long it rings (short =
@@ -495,7 +505,7 @@ track — for reasons particular to each, explained there.
 > synth. (SHAKER is stochastic and needs no rawwaves.)
 
 > RINGS and **PLAITS** need the **mi-UGens** plugins (as does the **CLOUDS** FX);
-> **SHAKER**, **MEMBRANE**, **MALLET**, **BOWED**, the **RING** / **RESO** / **GREY** FX, **ICARUS**
+> **SHAKER**, **MALLET**, **BOWED**, the **RING** / **RESO** / **GREY** FX, **ICARUS**
 > (`MoogLadder`) and **BEN** (`PulseDPW`/`SVF`/`DFM1`) need **sc3-plugins** present in the
 > SuperCollider bundle on the device. There are **no silent fallbacks** — a missing
 > dependency fails loudly at build.
@@ -1546,7 +1556,7 @@ overrun the audio thread. Every engine and effect was **measured on the device**
 | MOLLY | 11.7 | | OD | 2.5 |
 | NOIZEOP | 12.0 | | CLDS | ~6.0* |
 | ICARUS | 13.2 | | RESO | ~2.0* |
-| MEMBRANE / MALLET / BOWED | ~9 / ~7 / ~8* | | | |
+| MODAL / MALLET / BOWED | ~7 / ~7 / ~8* | | | |
 | PLUCK / CHAOS | ~7 / ~8* | | | |
 | WTABLE | ~9.5* | | | |
 | BYTEBEAT | ~6* | | | |
@@ -1570,7 +1580,7 @@ patterns on the device: **worst sustained 47%, worst peak 50%**.
   **that pattern's own tempo**.
 
 The generated tracks are laid out **contiguously from track 1 and grouped by engine**
-(in palette order — DRUM · FM7 · BUCHLOID · MOLLY · RINGS · BEN · NOIZEOP · ICARUS · PLAITS · SHAKER · MEMBRANE · MALLET · BOWED · PLUCK · CHAOS · WTABLE · BYTEBEAT · SAMPLE · CSOUND,
+(in palette order — DRUM · FM7 · BUCHLOID · MOLLY · RINGS · BEN · NOIZEOP · ICARUS · PLAITS · SHAKER · MODAL · MALLET · BOWED · PLUCK · CHAOS · WTABLE · BYTEBEAT · SAMPLE · CSOUND,
 with roles in musical order inside each block). Since the step buttons are coloured by
 engine, a generated rig reads as **contiguous colour blocks** rather than a scatter.
 

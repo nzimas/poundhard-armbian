@@ -130,7 +130,7 @@ const TYPE_COL = {
     ICARUS:   [18, 105],  /* BlueViolet / MutedViolet — schollz's Icarus drone/pad */
     PLAITS:   [31, 84],   /* Lime / DarkOlive — Mutable Plaits, the 16-model macro-osc */
     SHAKER:   [25, 106],  /* Amber / DarkAmber — STK Shakers (maraca/cabasa/tambourine…) */
-    MEMBRANE: [6, 70],    /* WarmRed / Brick — struck 2D-waveguide membrane (drums/gongs) */
+    MODAL:    [6, 70],    /* WarmRed / Brick — modal resonator bank (wood/metal/glass/bells) */
     MALLET:   [13, 85],   /* Gold / DarkGold — STK ModalBar (marimba/vibraphone/bells) */
     BOWED:    [33, 90],   /* Teal / DarkTeal — STK BandedWG (bowed metal/glass/bowl) */
     PLUCK:    [29, 108],  /* SpringGreen / DarkGreen — DWG plucked stiff string */
@@ -150,7 +150,7 @@ const TYPE_COL = {
  * noise burst. PLUCK now carries a `mode` param (pluck | tube) and its generate rolls
  * both models, so one pad reaches everything the two used to. 20 pads. */
 const ENGINE_TYPES = ['DRUM', 'FM7', 'BUCHLOID', 'MOLLY', 'RINGS', 'BEN', 'NOIZEOP',
-    'ICARUS', 'PLAITS', 'SHAKER', 'MEMBRANE', 'MALLET', 'BOWED', 'PLUCK', 'CHAOS',
+    'ICARUS', 'PLAITS', 'SHAKER', 'MODAL', 'MALLET', 'BOWED', 'PLUCK', 'CHAOS',
     'WTABLE', 'BYTEBEAT', 'SAMPLE', 'CSOUND', 'JOLT'];
 const N_ENGINES = ENGINE_TYPES.length;
 

@@ -48,7 +48,7 @@ _RATIO_GENTLE = (9 / 8, 8 / 9, 5 / 4, 4 / 5)
 _RATIO_MID = (3 / 2, 2 / 3, 4 / 3, 3 / 4)
 _RATIO_WILD = (7 / 4, 4 / 7, 7 / 5, 5 / 7, 5 / 3, 3 / 5)
 
-_DRUMISH = {"DRUM", "MEMBRANE", "SHAKER"}
+_DRUMISH = {"DRUM", "MODAL", "SHAKER"}
 
 
 def _density(tr) -> float:

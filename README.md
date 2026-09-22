@@ -133,7 +133,7 @@ dark — so you can read the whole rig at a glance.
 | 8 | **ICARUS** | 🟪 violet | dreamcrusher drone / pad (VarSaw + FB delay) |
 | 9 | **PLAITS** | 🟩 lime | Mutable Plaits — 16-model macro-oscillator |
 | 10 | **SHAKER** | 🟨 amber | STK Shakers — 23 shaker/scraper models |
-| 11 | **MEMBRANE** | 🟥 warm red | struck 2D-waveguide membrane — tunable drums / frame drums / gongs |
+| 11 | **MODAL** | 🟥 warm red | modal resonator bank — an exciter through up to 40 tuned resonators: struck or blown wood / metal / glass / bells / gongs. Levels itself, so every material sits at the same loudness |
 | 12 | **MALLET** | 🟡 gold | STK ModalBar — marimba / vibraphone / agogo / wood / bells |
 | 13 | **BOWED** | 🟦 teal | STK BandedWG — bowed/struck metal bars, glass harmonica, Tibetan bowl |
 | 14 | **PLUCK** | 🟩 spring | Waveguide voice — `mode` picks **pluck** (DWG stiff string: koto / clav / harp / muted) or **tube** (TwoTube: hollow formant / reedy) |
@@ -629,7 +629,7 @@ the list of per-step randomizers live on the open track.
 ### OSC (controller → engine, sclang langPort 57120)
 
 `/ph/tempo` · `/ph/run` · `/ph/steps` · `/ph/track t typeIdx` (**-1=empty** 0=DRUM
-1=FM7 2=BUCHLOID 3=MOLLY 4=RINGS 5=BEN 6=NOIZEOP 7=ICARUS 8=PLAITS 9=SHAKER 10=MEMBRANE 11=MALLET 12=BOWED 13=PLUCK 15=CHAOS 16=WTABLE 17=BYTEBEAT 18=SAMPLE 19=CSOUND; 14=TUBE retired into PLUCK) ·
+1=FM7 2=BUCHLOID 3=MOLLY 4=RINGS 5=BEN 6=NOIZEOP 7=ICARUS 8=PLAITS 9=SHAKER 10=MODAL 11=MALLET 12=BOWED 13=PLUCK 15=CHAOS 16=WTABLE 17=BYTEBEAT 18=SAMPLE 19=CSOUND; 14=TUBE retired into PLUCK) ·
 `/ph/param t "name" val` (WTABLE's `wt1`/`wt2` are sprite selectors — the engine (re)loads that oscillator's wavetable buffer instead of setting a synth arg; BYTEBEAT's `expr` is a bank index — the engine re-parses its **persistent** voice with the plugin's `/eval` unit command, sent a few control blocks after the node is created, never in the same instant; CSOUND's `arch` picks one of the ten architectures and its `m1`..`m8` are that architecture's macros — both travel to Csound in the score event, not to a synth) ·
 `/ph/preview typeIdx note vel mode [name val …]` (audition one voice → master) ·
 `/ph/pattern` · `/ph/stepset` · `/ph/steplock` · `/ph/stepmacro` · `/ph/clearlocks` ·
@@ -996,12 +996,13 @@ To the author's best knowledge:
 | **SuperCollider** (scsynth / sclang) | the audio engine + language | GPL-3.0-or-later |
 | **sc3-plugins** (incl. FM7, Greyhole, JPverb, Streson, DiodeRingMod, chaos & glitch UGens, DWG, TwoTube…) | many of the synthesis/FX UGens | GPL-2.0-or-later / GPL-3.0 (mixed) |
 | **mi-UGens** — SuperCollider ports of **Mutable Instruments** *Plaits, Rings, Clouds* | the PLAITS / RINGS / CLOUDS engines | Mutable Instruments DSP © Émilie Gillet (**MIT**); SC UGen wrapper **GPL-3.0** |
-| **STK — the Synthesis ToolKit** (Perry R. Cook & Gary P. Scavone) | SHAKER / MEMBRANE / MALLET / BOWED voices (+ bundled `rawwaves/`) | STK permissive free license |
+| **STK — the Synthesis ToolKit** (Perry R. Cook & Gary P. Scavone) | SHAKER / MALLET / BOWED voices (+ bundled `rawwaves/`) | STK permissive free license |
 | **ByteBeat** (github.com/midouest/bytebeat) | the BYTEBEAT engine (prebuilt `.so` shipped) | **GPL-3.0** (see `supercollider/plugins/ByteBeat/LICENSE`) |
 | **JACK2** (`jackd`, `libjackserver`, `libjack`) | the audio server the engine runs on — **shipped in the runtime bundle** so no other project has to provide it | server **GPL-2.0-or-later**, client library **LGPL-2.1-or-later** |
 | **python-osc** (vendored under `controller/vendor/`) | OSC transport in the controller | Unlicense / public domain |
 | **Csound** | the **CSOUND engine (20)** and the SAMPLE engine's offline mangler — **shipped in the runtime bundle** (`move/bundle/poundhard-csound.tar.gz`, 20 opcode plugins incl. `librtjack`) | LGPL-2.1-or-later |
 | **Composers Desktop Project (CDP8)** | the transform engine behind the **CHURN** modifier — **shipped**, built from source (`move/bundle/poundhard-cdp.tar.gz`, ~220 aarch64 programs) | see `CDP8/LICENSE.txt` (LGPL-2.1 for the library, per-program notices) |
+| **modal-synth** (github.com/crispinha/modal-synth, commit dc91465) by Crispin Hitchings-Anstice | the **MODAL** engine: its DSP vendored **unmodified** in `supercollider/plugins/PhModal/vendor/`, built into the `PhModal` UGen (prebuilt `.so` shipped; `move/build-modal.sh` reproduces it). Levelling, limiting and gain ramps are PoundHard's, after NorniOS's | **GPL-3.0-or-later**; its `randutils.hpp` is Melissa O'Neill's, **MIT** |
 | **softcut-lib** (github.com/monome/softcut-lib) | the tape engine under **COMPASS**, built as the `PhSoftcut` UGen (prebuilt `.so` shipped) | **GPL-3.0** (monome) |
 | **Compass** (github.com/oliviercreurer/compass) by Olivier Creurer, w/ contributions from @justmat + @gonecaving | `controller/compass/compass.lua` is vendored **verbatim** and executed, not reimplemented. The COMPASS modifier built on it was **retired** — it never reproduced its input convincingly on this hardware — and STROBE now occupies that pad. The script and its softcut infrastructure remain in the tree, unused, and the attribution stands. | no licence file upstream; © its author, vendored unmodified with attribution |
 | **Lua** (5.4) | the interpreter COMPASS runs that script under — **shipped in the runtime bundle** (`move/bundle/poundhard-lua.tar.gz`) | MIT |

@@ -377,9 +377,11 @@ _ENGINE_COST = {"DRUM": 5.3, "FM7": 8.5, "BUCHLOID": 6.0, "RINGS": 9.6,
                 # PLAITS measured 5.1% mean / 6.9% worst across its models (it's one
                 # well-optimised macro-oscillator) — the conservative figure is used.
                 # FM7 is a real 6-operator matrix — provisional 8.5 pending device measure.
-                # SHAKER (STK) / MEMBRANE (2D waveguide) provisional pending device measure.
+                # SHAKER (STK) provisional pending device measure. MODAL measured ON THE
+                # CM4 (tests/modal): 2.2% of a core per 40-mode voice, so 6.6 at the
+                # per-track cap of three voices sounding together.
                 # MALLET (STK ModalBar) / BOWED (STK BandedWG) provisional too.
-                "PLAITS": 6.9, "SHAKER": 7.0, "MEMBRANE": 9.0, "MALLET": 7.0, "BOWED": 8.0,
+                "PLAITS": 6.9, "SHAKER": 7.0, "MODAL": 6.6, "MALLET": 7.0, "BOWED": 8.0,
                 # WTABLE: 2 morphing BufRd oscillators + sub + noise + filter —
                 # provisional 9.5 pending device measure.
                 # BYTEBEAT: the ByteBeat UGen only re-evaluates on t change (cheap) +
@@ -435,7 +437,7 @@ def _role_pool() -> dict:
     pool.update(kits.PLAITS_ROLES)                    # one targeted role per Plaits model
     _CAT.update(kits.PLAITS_CAT)
     pool.update(kits.SHAKER_ROLES)                    # STK shakers — percussion
-    pool.update(kits.MEMBRANE_ROLES)                  # struck membranes — percussion
+    pool.update(kits.MODAL_ROLES)                     # modal resonator bank — materials
     pool.update(kits.MALLET_ROLES)                    # STK modal bars — tonal mallets
     pool.update(kits.BOWED_ROLES)                     # STK banded waveguide — tonal metal/glass
     # PLUCK_ROLES now carries the two-tube flavours too (TB HOLLOW / TB REEDY) as model 1.
@@ -449,8 +451,11 @@ def _role_pool() -> dict:
     pool.update(kits.BYTEBEAT_ROLES)                  # ByteBeat UGen — glitch/texture
     for n in kits.SHAKER_ROLES:
         _CAT[n] = "perc"
-    for n in kits.MEMBRANE_ROLES:
-        _CAT[n] = "perc"
+    # modal materials: struck wood/metal/gong are percussion, glass and bell are tonal,
+    # the blown bowl is a pad and the square-driven buzz is texture
+    _CAT.update({"MOD WOOD": "perc", "MOD METAL": "perc", "MOD GONG": "perc",
+                 "MOD GLASS": "tonal", "MOD BELL": "tonal", "MOD BOWL": "pad",
+                 "MOD BUZZ": "texture"})
     for n in list(kits.MALLET_ROLES) + list(kits.BOWED_ROLES) + list(kits.PLUCK_ROLES):
         _CAT[n] = "tonal"
     for n in kits.CHAOS_ROLES:
@@ -473,9 +478,9 @@ def _role_pool() -> dict:
 _ROLE_ORDER = {r.name: i for i, r in enumerate(kits.ROLES)}
 # Plaits' models order themselves by model index inside the PLAITS block
 _ROLE_ORDER.update({s[1]: 100 + s[0] for s in kits._PLAITS_SPEC})
-# SHAKER, MEMBRANE, MALLET, BOWED blocks sort after PLAITS (palette order 9..12)
+# SHAKER, MODAL, MALLET, BOWED blocks sort after PLAITS (palette order 9..12)
 _ROLE_ORDER.update({s[1]: 200 + i for i, s in enumerate(kits._SHAKER_SPEC)})
-_ROLE_ORDER.update({s[0]: 300 + i for i, s in enumerate(kits._MEMBRANE_SPEC)})
+_ROLE_ORDER.update({s[0]: 300 + i for i, s in enumerate(kits._MODAL_SPEC)})
 _ROLE_ORDER.update({s[1]: 400 + i for i, s in enumerate(kits._MALLET_SPEC)})
 _ROLE_ORDER.update({s[1]: 500 + i for i, s in enumerate(kits._BOWED_SPEC)})
 _ROLE_ORDER.update({s[0]: 600 + i for i, s in enumerate(kits._PLUCK_SPEC)})

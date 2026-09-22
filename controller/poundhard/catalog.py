@@ -99,7 +99,7 @@ class VoiceSpec:
 # EMPTY = -1: an unassigned track (no engine, never spawns). Assignable engines 0..7.
 TYPE_INDEX = {"EMPTY": -1, "DRUM": 0, "FM7": 1, "BUCHLOID": 2, "MOLLY": 3,
               "RINGS": 4, "BEN": 5, "NOIZEOP": 6, "ICARUS": 7, "PLAITS": 8,
-              "SHAKER": 9, "MEMBRANE": 10, "MALLET": 11, "BOWED": 12,
+              "SHAKER": 9, "MODAL": 10, "MALLET": 11, "BOWED": 12,
               "PLUCK": 13, "TUBE": 14, "CHAOS": 15, "WTABLE": 16, "BYTEBEAT": 17,
               "SAMPLE": 18, "CSOUND": 19, "MIC": 20, "JOLT": 21}
 
@@ -617,21 +617,55 @@ SHAKER = VoiceSpec(
 )
 
 # --------------------------------------------------------------------------- #
-# MEMBRANE — 2D waveguide struck membrane (MembraneCircle, sc3-plugins).
-# Struck drums / frame drums / gongs. Note shifts `tension` (pitch); `loss` = ring time.
+# MODAL — crispinha's modal synthesiser (vendored, GPL-3; the PhModal UGen). An exciter
+# through up to forty resonators tuned as a spectrum: a struck or blown material, wood /
+# metal / glass / bowl / bell. Replaced MEMBRANE on 2026-09-22 (same pad and index;
+# MEMBRANE tracks in older projects load as a default MODAL). The voice levels its own
+# spectrum and each exciter, so Amp means the same loudness whatever the material.
+# Knob order: what shapes the material most comes first.
 # --------------------------------------------------------------------------- #
-MEMBRANE = VoiceSpec(
-    type="MEMBRANE",
-    role="Struck 2D-waveguide membrane — tunable drums / frame drums / gongs.",
-    synthdef="phMembrane",
+MODAL_EXCITERS = ["strike", "noise", "pulses", "square", "chirp"]
+# the pulse train and the square only reach the modes on a whole-number divider, and the
+# square only drives them on resonance on an ODD one — so the divider is a choice, not a knob
+MODAL_DIVIDERS = [1, 2, 3, 4, 6, 8]
+MODAL = VoiceSpec(
+    type="MODAL",
+    role="Modal resonator bank — struck or blown wood / metal / glass / bowls / bells.",
+    synthdef="phModal",
     params=[
-        P("membrane.tension", "Tension", rmin=0.004, rmax=0.22, default=0.05,
-          curve=Curve.EXP, formatter="float3", musical=(0.01, 0.12)),
-        P("membrane.loss", "Ring", rmin=0.9, rmax=0.99998, default=0.9995,
-          formatter="float3", musical=(0.995, 0.99995)),
-        P("membrane.tone", "Strike Tone", default=0.5, musical=(0.2, 0.9)),
-        P("membrane.strike", "Strike Length", default=0.5, musical=(0.1, 0.8)),
-        *_COMMON_TAIL("membrane", ampd=0.9, ampmus=(0.5, 1.1)),
+        P("modal.exciter", "Exciter", curve=Curve.ENUM, enum=MODAL_EXCITERS,
+          default=0, randomize=RandomizePolicy.WIDE),
+        P("modal.decay", "Decay", unit="s", rmin=0.1, rmax=5.0, default=1.0,
+          curve=Curve.EXP, formatter="float2", musical=(0.15, 3.0)),
+        P("modal.falloff", "Falloff", rmin=0.0, rmax=3.0, default=1.0,
+          formatter="float2", musical=(0.3, 2.0)),
+        P("modal.detune", "Inharmonic", rmin=-0.06, rmax=2.0, default=0.0,
+          formatter="float3", musical=(-0.02, 0.5)),
+        P("modal.expo", "Stretch", rmin=0.1, rmax=10.0, default=1.0, curve=Curve.EXP,
+          formatter="float2", musical=(0.8, 1.6)),
+        P("modal.modes", "Modes", rmin=1.0, rmax=40.0, default=24.0, rate=Rate.DISCRETE,
+          formatter="int", musical=(4.0, 40.0)),
+        P("modal.hold", "Hold", unit="s", rmin=0.01, rmax=4.0, default=0.15,
+          curve=Curve.EXP, formatter="float2", musical=(0.03, 0.6)),
+        P("modal.exrate", "Divider", curve=Curve.ENUM, enum=[str(d) for d in MODAL_DIVIDERS],
+          default=3, randomize=RandomizePolicy.WIDE),
+        P("modal.attack", "Attack", unit="s", rmin=0.0, rmax=5.0, default=0.005,
+          curve=Curve.EXP, formatter="float3", musical=(0.001, 0.15)),
+        P("modal.release", "Release", unit="s", rmin=0.0, rmax=5.0, default=0.3,
+          curve=Curve.EXP, formatter="float2", musical=(0.05, 1.0)),
+        P("modal.amp2", "Odd Level", default=1.0, musical=(0.2, 1.0)),
+        P("modal.amp3", "Third Level", default=1.0, musical=(0.2, 1.0)),
+        P("modal.pos2", "Odd Shift", default=1.0, musical=(0.5, 1.0)),
+        P("modal.pos3", "Third Shift", default=1.0, musical=(0.5, 1.0)),
+        P("modal.fold", "Fold", curve=Curve.ENUM, enum=["stop", "undertones", "fold"],
+          default=0, randomize=RandomizePolicy.SAFE),
+        P("modal.foldpt", "Fold Point", unit="Hz", rmin=20.0, rmax=20000.0, default=1600.0,
+          curve=Curve.EXP, formatter="Hz", musical=(400.0, 6000.0)),
+        P("modal.fx", "Vowel X", default=0.5),
+        P("modal.fy", "Vowel Y", default=0.5),
+        P("modal.throat", "Throat", default=0.5),
+        P("modal.fmix", "Vowel Mix", default=0.0, musical=(0.0, 0.6)),
+        *_COMMON_TAIL("modal", ampd=0.9, ampmus=(0.5, 1.1)),
     ],
 )
 
@@ -1010,7 +1044,7 @@ JOLT = VoiceSpec(
 
 VOICES: dict[str, VoiceSpec] = {v.type: v for v in
                                 (DRUM, FM7, BUCHLOID, MOLLY, RINGS, BEN, NOIZEOP, ICARUS,
-                                 PLAITS, SHAKER, MEMBRANE, MALLET, BOWED, PLUCK, TUBE, CHAOS,
+                                 PLAITS, SHAKER, MODAL, MALLET, BOWED, PLUCK, TUBE, CHAOS,
                                  MIC,
                                  WTABLE, BYTEBEAT, SAMPLE, CSOUND, JOLT)}
 

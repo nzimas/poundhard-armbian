@@ -687,16 +687,29 @@
 	// A short filtered-noise STRIKE excites the mesh; `tension` sets pitch/character, `loss`
 	// the ring time. The note shifts tension so the sequencer tunes the drum. Frees on
 	// silence (the membrane's own decay), with a hard time cap for safety.
-	SynthDef(\phMembrane, { |out = 16, note = 48, vel = 1,
-		tension = 0.05, loss = 0.9995, tone = 0.5, strike = 0.5, amp = 0.9, pan = 0|
+	// MODAL — crispinha's modal synthesiser as the PhModal UGen (supercollider/plugins/PhModal):
+	// an exciter through up to forty resonators tuned as a spectrum. The UGen levels its own
+	// spectrum and each exciter against the others, and soft-limits, so `amp` is the same
+	// loudness whatever material the kit generator rolled. A held exciter (everything but
+	// strike) stays open for `hold` seconds and then releases; a strike ignores it.
+	// `exrate` is an index into the dividers 1,2,3,4,6,8: the pulse train and the square
+	// only reach the modes on a whole number, so it is never a continuous knob.
+	// Upstream squares velocity itself; anything over 1 (an accent) is applied as gain.
+	SynthDef(\phModal, { |out = 16, note = 48, vel = 1,
+		exciter = 0, decay = 1, falloff = 1, detune = 0, expo = 1, modes = 24, hold = 0.15,
+		exrate = 3, attack = 0.005, release = 0.3, amp2 = 1, amp3 = 1, pos2 = 1, pos3 = 1,
+		fold = 0, foldpt = 1600, fx = 0.5, fy = 0.5, throat = 0.5, fmix = 0,
+		amp = 0.9, pan = 0|
 		var v = vel.clip(0, 2).max(0.03);
-		var sEnv = EnvGen.ar(Env.perc(0.0002, (0.002 + (strike * 0.03)).clip(0.001, 0.08), 1, -6));
-		var exc = LPF.ar(WhiteNoise.ar, tone.clip(0, 1).linexp(0, 1, 600, 9000)) * sEnv * (0.4 + (v * 0.6));
-		var tns = (tension * (2 ** ((note.clip(24, 96) - 48) / 24))).clip(0.004, 0.22);
-		var sig = MembraneCircle.ar(exc, tns, loss.clip(0.9, 0.99998));
-		sig = LeakDC.ar(sig) * v * amp * 2.0;
-		DetectSilence.ar(sig, 0.0003, 0.15, doneAction: 2);
-		Line.kr(0, 1, 8.0, doneAction: 2);
+		var gate = Trig1.kr(1, hold.clip(0.01, 4));
+		var div = Select.kr(exrate.round.clip(0, 5), [1, 2, 3, 4, 6, 8]);
+		var sig = PhModal.ar(note.clip(12, 120).midicps, v.min(1), gate,
+			amp2, amp3, pos2, pos3, fold.round, foldpt, exciter.round, div, attack, release,
+			modes.round, detune, expo, falloff, decay, fx, fy, throat, fmix,
+			level: 2.0);
+		sig = LeakDC.ar(sig) * v.max(1) * amp;
+		DetectSilence.ar(sig, 0.0003, 0.2, doneAction: 2);
+		Line.kr(0, 1, 12.0, doneAction: 2);
 		~voiceOut.(out, ~killbad.(~spread.(sig, pan)));
 	}).add;
 

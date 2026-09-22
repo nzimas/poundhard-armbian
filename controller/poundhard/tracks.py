@@ -230,6 +230,9 @@ class Track:
         if raw_type == "FMTONE":            # legacy compat: FMTONE was replaced by FM7 (same
             raw_type = "FM7"                # track index). 2-op params don't map onto 6-op FM,
             params = {}                     # so the track loads as a default FM7 to be re-rolled.
+        elif raw_type == "MEMBRANE":        # MEMBRANE was replaced by MODAL (same pad, same
+            raw_type = "MODAL"              # track index). A waveguide membrane's params mean
+            params = {}                     # nothing to a modal bank: a default MODAL, to re-roll.
         t = cls(type=raw_type, note=int(d.get("note", 40)),
                 vel=float(d.get("vel", 1.0)), sample=int(d.get("sample", -1)),
                 params=params, muted=bool(d.get("muted", False)),

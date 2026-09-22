@@ -251,6 +251,20 @@ done
 $SSH "chmod +x $PH/*.sh"
 step "launch scripts"
 
+say "native UGens"
+# Compiled SuperCollider plugins: the .so pair (scsynth + supernova) into PoundHard's
+# plugin dir, the class file into its own Extensions dir where its sclang_conf looks.
+# Shipped every time, so a fresh card gets them and a rebuilt one gets the new build.
+for u in ByteBeat:ByteBeat Softcut:PhSoftcut PhMicIn:PhMicIn PhModal:PhModal; do
+    dir="${u%%:*}"; name="${u##*:}"; src="$HERE/supercollider/plugins/$dir"
+    [ -f "$src/$name.so" ] || die "missing $src/$name.so — build it first (move/build-*.sh)"
+    $SSH "mkdir -p $PH/plugins $PH/share/SuperCollider/Extensions/$name"
+    $SCP "$src/$name.so" "root@${HOST}:$PH/plugins/"
+    if [ -f "$src/${name}_supernova.so" ]; then $SCP "$src/${name}_supernova.so" "root@${HOST}:$PH/plugins/"; fi
+    $SCP "$src"/*.sc "root@${HOST}:$PH/share/SuperCollider/Extensions/$name/"
+    step "$name"
+done
+
 say "appliance UI"
 $SSH "mkdir -p $MOD"
 $SCP "$HERE/move/schwung-module/poundhard/ui.js" "root@${HOST}:$MOD/ui.js"
