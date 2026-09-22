@@ -783,29 +783,68 @@ _PLUCK_WEIGHTS.update({"TB HOLLOW": 2, "TB REEDY": 2})
 
 
 # --------------------------------------------------------------------------- #
-# CHAOS (chaotic-map oscillator) — per-map targeting. (type, name, note, chaosA,
-# chaosB, fold, cutoff, decay). A texture/noise voice in the BEN/NOIZEOP spirit.
+# CHAOS — eight circuits (catalog.CHAOS_CIRCUITS), two characters each: one hit and one
+# texture, so a CHAOS kit spans drum, squeal, stutter, drone. Octaves from the root A1.
 # --------------------------------------------------------------------------- #
+def _C(name, mode, weight, notes, octave, cat, **bands):
+    return {"name": name, "mode": mode, "weight": weight, "notes": notes, "octave": octave,
+            "cat": cat, "bands": {f"chaos.{k}": v for k, v in bands.items()}}
+
+
 _CHAOS_SPEC = [
-    (0, "CH FBSINE", (0, 5, 7), (0.5, 3.0), (0.2, 2.5), (0.0, 0.5), (400, 10000), (0.1, 1.0)),
-    (1, "CH LATOO",  (0, 5, 7), (0.5, 3.5), (0.3, 2.0), (0.0, 0.5), (600, 12000), (0.15, 1.2)),
-    (2, "CH HENON",  (0, 5, 7), (1.0, 3.0), (0.5, 2.0), (0.0, 0.4), (500, 9000),  (0.1, 0.8)),
-    (3, "CH STD",    (0, 5, 7), (1.0, 3.0), (0.2, 1.5), (0.0, 0.4), (400, 8000),  (0.1, 0.9)),
-    (4, "CH CUSP",   (0, 5, 7), (0.8, 2.5), (0.3, 2.0), (0.0, 0.5), (500, 10000), (0.1, 0.9)),
+    # scream: cross-coupled FM
+    _C("CH SCREAM", 0, 2.0, (0, 5, 7), 24, "texture", chaosA=(0.3, 0.8), chaosB=(0.0, 1.0),
+       drive=(0.5, 0.9), sweep=(0.2, 0.8), decay=(0.2, 1.2)),
+    _C("CH GROWL", 0, 1.0, (0, 7), 0, "bass", chaosA=(0.4, 0.8), chaosB=(0.0, 0.3),
+       cutoff=(400.0, 3000.0), hold=(0.1, 0.5), decay=(0.3, 1.0)),
+    # lorenz: attractor-bent pitch
+    _C("CH LORENZ", 1, 1.5, (0, 5, 7), 24, "texture", chaosA=(0.3, 0.9), chaosB=(0.3, 0.9),
+       hold=(0.0, 0.4), decay=(0.3, 2.0)),
+    _C("CH SQUEAL", 1, 1.0, (0, 7), 36, "texture", chaosA=(0.6, 1.0), chaosB=(0.6, 1.0),
+       decay=(0.1, 0.4)),
+    # crunch: audio-rate maps
+    _C("CH CRUNCH", 2, 1.5, (0, 3, 7), 12, "perc", decay=(0.05, 0.4), crush=(0.0, 0.5),
+       amp=(0.9, 1.3)),
+    _C("CH STATIC", 2, 1.0, (0, 7), 36, "texture", chaosB=(0.7, 1.0), cutoff=(2000.0, 14000.0),
+       hold=(0.2, 1.0), decay=(0.3, 1.5)),
+    # stutter: a burst of chaotic steps
+    _C("CH STUTTER", 3, 2.0, (0, 3, 5, 7), 24, "texture", chaosB=(0.3, 0.8),
+       hold=(0.3, 1.2), decay=(0.2, 0.6)),
+    _C("CH GLITCH", 3, 1.0, (0, 7), 36, "perc", chaosB=(0.7, 1.0), crush=(0.2, 0.6),
+       hold=(0.1, 0.4), decay=(0.05, 0.2)),
+    # feedback: a loop past unity gain
+    _C("CH FEEDBACK", 4, 1.5, (0, 5, 7), 24, "texture", chaosA=(0.4, 1.0), chaosB=(0.1, 0.8),
+       hold=(0.0, 0.3), decay=(0.3, 1.5)),
+    _C("CH HOWL", 4, 1.0, (0, 7), 12, "pad", chaosA=(0.5, 0.9), chaosB=(0.0, 0.4),
+       attack=(0.05, 0.4), hold=(0.3, 1.2), decay=(0.5, 2.0)),
+    # snap: chaotic drums
+    _C("CH SNAP", 5, 2.0, (0, 5, 7), 12, "perc", chaosA=(0.2, 0.8), chaosB=(0.1, 0.6),
+       cutoff=(3000.0, 14000.0), sweep=(0.0, 0.6), decay=(0.1, 0.5)),
+    _C("CH KICK", 5, 1.5, (0,), 0, "perc", chaosA=(0.1, 0.5), chaosB=(0.3, 0.8),
+       drive=(0.3, 0.8), cutoff=(1500.0, 6000.0), decay=(0.2, 0.6)),
+    # circuit: comparator chaos
+    _C("CH CIRCUIT", 6, 1.5, (0, 5, 7), 12, "perc", fold=(0.0, 0.3), decay=(0.05, 0.6),
+       amp=(0.8, 1.2)),
+    _C("CH BENT", 6, 1.0, (0, 3, 7), 24, "texture", crush=(0.1, 0.5),
+       hold=(0.1, 0.6), decay=(0.2, 0.8)),
+    # swarm: a cloud of chaotic sines
+    _C("CH SWARM", 7, 1.5, (0, 5, 7), 12, "pad", attack=(0.05, 0.6), hold=(0.2, 1.0),
+       decay=(0.5, 2.5)),
+    _C("CH BUZZ", 7, 1.0, (0, 7), 12, "bass", chaosA=(0.6, 1.0), decay=(0.1, 0.5),
+       cutoff=(1500.0, 8000.0), amp=(0.9, 1.3)),
 ]
 
 
-def _chaos_role(spec) -> Role:
-    typ, name, note, ca, cb, fold, cut, dec = spec
-    return Role(name, "CHAOS", fixed={"chaos.type": float(typ)},
-                note_choices=note, octave=0,
-                bands={"chaos.chaosA": ca, "chaos.chaosB": cb, "chaos.fold": fold,
-                       "chaos.cutoff": cut, "chaos.decay": dec}, vel=(0.75, 1.0))
+def _chaos_role(m: dict) -> Role:
+    return Role(m["name"], "CHAOS", fixed={"chaos.mode": float(m["mode"])},
+                note_choices=m["notes"], octave=m["octave"], bands=dict(m["bands"]),
+                vel=(0.85, 1.0))
 
 
-CHAOS_ROLES: dict[str, Role] = {s[1]: _chaos_role(s) for s in _CHAOS_SPEC}
-PALETTE_ROLES["CHAOS"] = CHAOS_ROLES["CH FBSINE"]
-_CHAOS_WEIGHTS = {"CH FBSINE": 3, "CH LATOO": 2, "CH HENON": 2, "CH STD": 2, "CH CUSP": 2}
+CHAOS_ROLES: dict[str, Role] = {m["name"]: _chaos_role(m) for m in _CHAOS_SPEC}
+CHAOS_CAT: dict[str, str] = {m["name"]: m["cat"] for m in _CHAOS_SPEC}
+PALETTE_ROLES["CHAOS"] = CHAOS_ROLES["CH SCREAM"]
+_CHAOS_WEIGHTS = {m["name"]: m["weight"] for m in _CHAOS_SPEC}
 
 
 # --------------------------------------------------------------------------- #

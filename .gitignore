@@ -34,3 +34,4 @@ move/bundle/cdp/
 /.cache/
 # offline test outputs
 tests/modal/out/
+tests/chaos/out/

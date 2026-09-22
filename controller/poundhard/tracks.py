@@ -233,6 +233,8 @@ class Track:
         elif raw_type == "MEMBRANE":        # MEMBRANE was replaced by MODAL (same pad, same
             raw_type = "MODAL"              # track index). A waveguide membrane's params mean
             params = {}                     # nothing to a modal bank: a default MODAL, to re-roll.
+        elif raw_type == "CHAOS" and "chaos.type" in params:   # the old map oscillator: its
+            params = {}                     # params mean nothing to the circuits — re-roll.
         t = cls(type=raw_type, note=int(d.get("note", 40)),
                 vel=float(d.get("vel", 1.0)), sample=int(d.get("sample", -1)),
                 params=params, muted=bool(d.get("muted", False)),

@@ -384,11 +384,27 @@ track — for reasons particular to each, explained there.
   driven by the same excitation, so one pad now reaches both and **generate** rolls across
   all six flavours (KOTO · CLAV · HARP · MUTED · HOLLOW · REEDY). Projects saved before the
   merge still load: TUBE keeps its old engine type, it just has no pad.
-- **CHAOS** — a voice built from SuperCollider's audio-rate **chaos generators** (feedback
-  sine + iterated maps: Latoocarfian, Henon, Standard, Cusp). `type` picks the map; the note
-  sets the iteration frequency and `chaosA`/`chaosB` steer the attractor from pitched tone to
-  full noise, then a wavefolder and resonant filter shape it. Glitch/noise from core UGens —
-  no plugin — in the spirit of BEN and NOIZEOP.
+- **CHAOS** — **eight chaotic circuits**, each a small nonlinear system that runs away on
+  its own. **Circuit** picks one:
+  **scream** (two sines phase-modulating each other through a feedback loop),
+  **lorenz** (a Lorenz attractor bending an oscillator's pitch by octaves — squeals and
+  warbles), **crunch** (Henon / Cusp / Latoocarfian maps at audio rate, gated at the note),
+  **stutter** (a logistic map stepping pitch and gates — a burst of glitchy notes inside
+  one hit), **feedback** (a resonant loop run past unity gain, its delay bent by its own
+  level — howls and screeches), **snap** (a chaotic drum: a feedback sine with a pitch drop
+  and a chaotic click), **circuit** (a comparator on a chaotic map — hard-edged square
+  chaos) and **swarm** (four feedback sines past the point of chaos, spread and wobbling).
+  **Chaos** pushes the system from order into chaos; **Motion** sets how fast it moves.
+  Every circuit then runs through one chain: a resonant **filter** swept by its own
+  envelope (**Filter Env**), INTO a **Drive**, a **Wavefold** and a bit/rate **Crush**, and an
+  attack–**Hold**–decay envelope. The filter sits before the drive, so a dark setting stays
+  loud. Each circuit is levelled against the others and the whole engine sits with the
+  loudest of the rest (NOIZEOP, BYTEBEAT). **generate** rolls sixteen characters, a hit and
+  a texture per circuit: scream · growl · lorenz · squeal · crunch · static · stutter ·
+  glitch · feedback · howl · snap · kick · circuit · bent · swarm · buzz. Each circuit is
+  its own SynthDef, so a voice computes only the circuit it plays. *CHAOS was rewritten on
+  2026-09-22; a CHAOS track from an older project loads as a default circuit, ready to
+  re-roll.*
 - **WTABLE** — a full **SuperCollider rebuild of Ableton's Wavetable** that plays the Move's
   **own factory wavetables** (the *sprites* under `/opt/move/Dsp/Vector/Sprites/` — each a bank
   of single-cycle 1024-sample frames). Two oscillators read a sprite each and **morph** through

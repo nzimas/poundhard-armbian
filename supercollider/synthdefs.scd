@@ -793,31 +793,110 @@
 		~voiceOut.(out, ~killbad.(~spread.(sig, pan)));
 	}).add;
 
-	// ================= CHAOS — chaotic-map oscillator (core UGens), self-freeing =========
-	// A voice built from SuperCollider's audio-rate CHAOS generators (feedback sine + iterated
-	// maps). `type` selects the map; the note sets the iteration frequency, chaosA/chaosB steer
-	// the attractor (from tone to noise), plus a wavefolder and resonant filter. Glitch/noise
-	// in the spirit of BEN and NOIZEOP, from core UGens (no plugin).
-	SynthDef(\phChaos, { |out = 16, note = 48, vel = 1,
-		type = 0, chaosA = 1.1, chaosB = 0.5, fold = 0.0, cutoff = 6000, res = 0.2,
-		attack = 0.003, decay = 0.5, ampCurve = -4, amp = 0.55, pan = 0|
-		var v = vel.clip(0, 2).max(0.03);
-		var f0 = note.clip(0, 127).midicps.clip(20, 8000);
-		var aEnv = EnvGen.ar(Env.perc(attack.clip(0.0005, 2), decay.clip(0.01, 8), 1, ampCurve.clip(-8, -1)));
-		var srcs = [
-			FBSineC.ar(f0 * 2, chaosA.clip(0.1, 4), chaosB.clip(0, 3), 1.0, 0.5),
-			LatoocarfianC.ar(f0, chaosA.linlin(0, 4, -3, 3), chaosB.linlin(0, 3, 0.5, 1.5), 1.5, 0.5),
-			HenonC.ar(f0, chaosA.linlin(0, 4, 1.0, 1.4), chaosB.linlin(0, 3, 0.2, 0.4)),
-			StandardL.ar(f0, chaosA.linlin(0, 4, 0.3, 3.0)),
-			CuspL.ar(f0, chaosA.linlin(0, 4, 0.9, 1.2), chaosB.linlin(0, 3, 1.7, 2.0))
-		];
-		var sig = Select.ar(type.round.clip(0, 4), srcs).tanh;
-		sig = SelectX.ar(fold.clip(0, 1), [sig, (sig * (1 + (fold * 4))).fold2(1)]);
-		sig = RLPF.ar(sig, cutoff.clip(40, 16000), (1 - (res.clip(0, 1) * 0.9)).clip(0.05, 1));
-		sig = LeakDC.ar(sig) * aEnv * v * amp * 2.8;   // chaotic maps have low RMS — bring up
-		Line.kr(0, 1, attack.clip(0.0005, 2) + decay.clip(0.01, 8) + 0.2, doneAction: 2);
-		~voiceOut.(out, ~killbad.(~spread.(sig, pan)));
-	}).add;
+	// ================= CHAOS — eight chaotic circuits, one SynthDef each, self-freeing ======
+	// Each circuit is a small nonlinear system that runs away on its own; `mode` picks one
+	// (engine.scd ~chaosDefs), so a voice only computes the circuit it plays:
+	//   0 scream   two sines phase-modulating each other through a one-block feedback loop
+	//   1 lorenz   a Lorenz attractor bending an oscillator's pitch by octaves
+	//   2 crunch   Henon / Cusp / Latoocarfian maps at audio rate, gated at the note
+	//   3 stutter  a logistic map stepping pitch and gates: a burst of notes inside one hit
+	//   4 feedback a resonant loop with gain above one and a delay its own level bends
+	//   5 snap     a chaotic drum: a feedback sine with a pitch drop and a chaotic click
+	//   6 circuit  a comparator on a chaotic map: hard-edged square chaos, ring-modded
+	//   7 swarm    four feedback sines past the point of chaos, spread and wobbling
+	// Every circuit comes out at about full scale, then one shared chain: a resonant filter
+	// (swept by its own envelope) INTO a drive, a wavefolder, a bit/rate crusher and an
+	// attack-hold-decay envelope. The filter sits before the drive, so a dark setting stays
+	// loud; ~chaosTrim levels each circuit against the other engines (measured, not guessed).
+	// chaosA = how far the system is pushed (order -> chaos); chaosB = how fast it moves.
+	~chaosCircuits = [
+		{ |f0, a, b, fe|   // scream
+			var fb = LocalIn.ar(2), idx = a.linexp(0, 1, 0.3, 4) * (1 + (fe * 1.5));
+			var o1 = SinOsc.ar(f0, fb[1] * idx);
+			var o2 = SinOsc.ar(f0 * (b.linlin(0, 1, 1.0, 3.0) + 0.0071), fb[0] * idx);
+			LocalOut.ar([o1, o2]);
+			(o1 + o2) * 0.6
+		},
+		{ |f0, a, b, fe|   // lorenz
+			var lz = LorenzL.ar(b.linexp(0, 1, 60, 8000), 10, a.linlin(0, 1, 24, 60), 2.667, 0.02);
+			var m = (lz * 0.06).tanh;
+			var fr = (f0 * (2 ** (m * a.linlin(0, 1, 0.5, 3.0)))).clip(20, 14000);
+			(VarSaw.ar(fr, 0, (0.5 + (m * 0.4)).clip(0.05, 0.95)) * 0.8) + (m * 0.4)
+		},
+		{ |f0, a, b, fe|   // crunch
+			var r = (f0 * b.linexp(0, 1, 2, 64)).clip(40, 22000);
+			var src = SelectX.ar(a * 2, [HenonN.ar(r, 1.4, 0.3) * 0.75, CuspN.ar(r, 1, 1.9),
+				LatoocarfianN.ar(r, 1, 3, 0.5, 0.5) * 0.66]);
+			LeakDC.ar(src) * (0.35 + (0.65 * LFPulse.ar(f0)))
+		},
+		{ |f0, a, b, fe|   // stutter
+			var rate = b.linexp(0, 1, 5, 48), clk = Impulse.ar(rate);
+			var lg = Latch.ar(Logistic.ar(a.linlin(0, 1, 3.6, 3.99), rate, 0.37), clk);
+			var lg2 = Latch.ar(Logistic.ar(3.93, rate, 0.61), clk);
+			var fr = (f0 * (lg * a.linlin(0, 1, 7, 36)).round(1).midiratio).clip(20, 12000);
+			var st = Decay2.ar(clk * (lg2 > 0.3), 0.001, rate.reciprocal * 0.7).clip(0, 1);
+			((Pulse.ar(fr, (0.2 + (lg2 * 0.5)).clip(0.05, 0.95)) * 0.8) + (SinOsc.ar(fr * 0.5) * 0.5)) * st
+		},
+		{ |f0, a, b, fe|   // feedback
+			var fb = LocalIn.ar(1);
+			var x = (WhiteNoise.ar * EnvGen.ar(Env.perc(0.0005, 0.01))) + (fb * a.linlin(0, 1, 0.97, 1.3));
+			x = BPF.ar(x, (f0 * 2).clip(30, 12000), b.linlin(0, 1, 0.05, 0.5)) * 1.5;
+			x = DelayC.ar(x, 0.06, ((f0.reciprocal * (1 + (x.abs * b * 2))) - ControlDur.ir).clip(0.0001, 0.05));
+			x = ((x * 1.5).tanh + ((x * 2).sin * 0.2)).clip2(1);
+			LocalOut.ar(x);
+			x
+		},
+		{ |f0, a, b, fe|   // snap
+			var pe = EnvGen.ar(Env.perc(0.0005, b.linexp(0, 1, 0.02, 0.3), 1, -6));
+			var body = SinOscFB.ar((f0 * (1 + (pe * a.linlin(0, 1, 2, 12)))).clip(20, 12000),
+				a.linlin(0, 1, 0.3, 1.8) + pe);
+			var click = HenonN.ar(SampleRate.ir * 0.5, 1.4, 0.3) * 0.7 * EnvGen.ar(Env.perc(0.0005, 0.03));
+			body + click
+		},
+		{ |f0, a, b, fe|   // circuit
+			var m = LatoocarfianC.ar((f0 * b.linexp(0, 1, 1, 16)).clip(20, 22000), 1, 3, 0.5, 0.5);
+			var cmp = ((m > (a * 0.8 - 0.4)) * 2) - 1;
+			(cmp * 0.5) + (cmp * LFPulse.ar(f0 * 0.5, 0, 0.5, 2, -1) * 0.5)
+		},
+		{ |f0, a, b, fe|   // swarm
+			var wob = Lag.ar(CuspN.ar(b.linexp(0, 1, 2, 40), 1, 1.9), 0.05) * b * 0.03;
+			var fbk = a.linlin(0, 1, 0.5, 2.2);
+			[1, 1.5, 2.01, 2.99].collect({ |r, i|
+				SinOscFB.ar((f0 * (1 + ((r - 1) * b.linlin(0, 1, 0.2, 1))) * (1 + (wob * (i + 1)))).clip(20, 14000),
+					fbk + (i * 0.1))
+			}).sum * 0.35
+		}
+	];
+	~chaosNames = [\phChaosScream, \phChaosLorenz, \phChaosCrunch, \phChaosStutter,
+		\phChaosFeedback, \phChaosSnap, \phChaosCircuit, \phChaosSwarm];
+	// Per circuit, from tests/chaos (loudest 250 ms): the circuits level with each other, and
+	// the whole engine sits with the loudest of the rest (NOIZEOP, BYTEBEAT) live on the Move.
+	~chaosTrim = ([0, 0, 1.5, 6, 0, 2, 2.5, 1] - 5.5).dbamp;
+	~chaosCircuits.do { |circuit, i|
+		var trim = ~chaosTrim[i];
+		SynthDef(~chaosNames[i], { |out = 16, note = 48, vel = 1,
+			chaosA = 0.5, chaosB = 0.5, drive = 0.5, fold = 0.0, crush = 0.0,
+			cutoff = 8000, res = 0.2, sweep = 0.3,
+			attack = 0.002, hold = 0.0, decay = 0.6, ampCurve = -4, amp = 0.8, pan = 0|
+			var v = vel.clip(0, 2).max(0.03);
+			var f0 = note.clip(0, 127).midicps.clip(20, 6000);
+			var a = chaosA.clip(0, 1), b = chaosB.clip(0, 1);
+			var atk = attack.clip(0.0005, 2), hd = hold.clip(0, 4), dec = decay.clip(0.01, 8);
+			var aEnv = EnvGen.ar(Env([0, 1, 1, 0], [atk, hd, dec], [0, 0, ampCurve.clip(-8, -1)]));
+			var fe = EnvGen.kr(Env.perc(0.001, (dec * 0.5).clip(0.01, 4), 1, -4));
+			var sig = circuit.value(f0, a, b, fe);
+			var cr = crush.clip(0, 1), bits = cr.linlin(0, 1, 16, 3);
+			sig = RLPF.ar(sig, (cutoff * (2 ** (sweep.clip(-1, 1) * 5 * fe))).clip(30, 18000),
+				res.clip(0, 1).linlin(0, 1, 1, 0.08));
+			sig = (sig * drive.clip(0, 1).linexp(0, 1, 1, 30)).tanh;
+			sig = SelectX.ar(fold.clip(0, 1), [sig, (sig * (1 + (fold.clip(0, 1) * 3))).fold2(1)]);
+			sig = Select.ar(cr > 0.01, [sig,
+				Latch.ar(sig, Impulse.ar(cr.linexp(0, 1, 30000, 1500))).round(2 ** bits.neg)]);
+			sig = LeakDC.ar(sig) * aEnv * v * amp * trim;
+			Line.kr(0, 1, atk + hd + dec + 0.2, doneAction: 2);
+			~voiceOut.(out, ~killbad.(~spread.(sig, pan)));
+		}).add;
+	};
 
 	// ================= WTABLE — Ableton Wavetable rebuild (uses Move's own sprites) =====
 	// Two morphing wavetable oscillators reading Ableton's Wavetable "sprites" (each a bank

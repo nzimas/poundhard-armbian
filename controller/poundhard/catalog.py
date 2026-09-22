@@ -790,30 +790,39 @@ TUBE = VoiceSpec(
 )
 
 # --------------------------------------------------------------------------- #
-# CHAOS — chaotic-map oscillator (core UGens): feedback sine + iterated maps.
-# `type` selects the map; chaosA/chaosB steer it from tone to noise. Glitch/noise.
+# CHAOS — eight chaotic circuits (core UGens), one SynthDef each, picked by `mode`:
+# scream / lorenz / crunch / stutter / feedback / snap / circuit / swarm. Chaos pushes
+# the system from order into chaos, Motion sets how fast it moves; a swept resonant
+# filter feeds a drive, a folder and a crusher. Levelled per circuit: never meek.
 # --------------------------------------------------------------------------- #
+CHAOS_CIRCUITS = ["scream", "lorenz", "crunch", "stutter", "feedback", "snap", "circuit", "swarm"]
 CHAOS = VoiceSpec(
     type="CHAOS",
-    role="Chaotic-map oscillator (FBSine / Latoocarfian / Henon / Standard / Cusp).",
-    synthdef="phChaos",
+    role="Eight chaotic circuits: cross-FM scream, Lorenz, map crunch, logistic stutter, "
+         "feedback loop, chaotic drum, comparator, feedback swarm.",
+    synthdef="phChaosScream",
     params=[
-        P("chaos.type", "Map", curve=Curve.ENUM,
-          enum=["fbsine", "latoocarf", "henon", "standard", "cusp"],
+        P("chaos.mode", "Circuit", curve=Curve.ENUM, enum=CHAOS_CIRCUITS,
           default=0, randomize=RandomizePolicy.WIDE),
-        P("chaos.chaosA", "Chaos A", rmin=0.0, rmax=4.0, default=1.1, musical=(0.3, 3.2)),
-        P("chaos.chaosB", "Chaos B", rmin=0.0, rmax=3.0, default=0.5, musical=(0.1, 2.4)),
-        P("chaos.fold", "Wavefold", default=0.0, musical=(0.0, 0.6)),
-        P("chaos.cutoff", "Cutoff", unit="Hz", rmin=40.0, rmax=16000.0, default=6000.0,
-          curve=Curve.EXP, formatter="Hz", musical=(300.0, 14000.0)),
+        P("chaos.chaosA", "Chaos", default=0.5, musical=(0.2, 0.95)),
+        P("chaos.chaosB", "Motion", default=0.5, musical=(0.1, 0.9)),
+        P("chaos.drive", "Drive", default=0.5, musical=(0.2, 0.9), danger=DangerClass.LOUDNESS),
+        P("chaos.fold", "Wavefold", default=0.0, musical=(0.0, 0.5)),
+        P("chaos.crush", "Crush", default=0.0, musical=(0.0, 0.3)),
+        P("chaos.cutoff", "Cutoff", unit="Hz", rmin=40.0, rmax=16000.0, default=8000.0,
+          curve=Curve.EXP, formatter="Hz", musical=(600.0, 14000.0)),
         P("chaos.res", "Resonance", default=0.2, musical=(0.0, 0.7), danger=DangerClass.FEEDBACK),
-        P("chaos.attack", "Attack", unit="s", rmin=0.0005, rmax=2.0, default=0.003,
-          curve=Curve.EXP, formatter="float3", musical=(0.001, 0.05)),
-        P("chaos.decay", "Decay", unit="s", rmin=0.01, rmax=8.0, default=0.5,
-          curve=Curve.EXP, formatter="float2", musical=(0.05, 2.0)),
+        P("chaos.sweep", "Filter Env", rmin=-1.0, rmax=1.0, default=0.3, curve=Curve.BIPOLAR,
+          musical=(-0.3, 0.8)),
+        P("chaos.attack", "Attack", unit="s", rmin=0.0005, rmax=2.0, default=0.002,
+          curve=Curve.EXP, formatter="float3", musical=(0.001, 0.03)),
+        P("chaos.hold", "Hold", unit="s", rmin=0.0, rmax=4.0, default=0.0,
+          formatter="float2", musical=(0.0, 0.3)),
+        P("chaos.decay", "Decay", unit="s", rmin=0.01, rmax=8.0, default=0.6,
+          curve=Curve.EXP, formatter="float2", musical=(0.08, 1.5)),
         P("chaos.ampCurve", "Amp Curve", rmin=-8.0, rmax=-1.0, default=-4.0,
           formatter="float1", musical=(-6.0, -2.0)),
-        *_COMMON_TAIL("chaos", ampd=0.55, ampmus=(0.35, 0.9)),
+        *_COMMON_TAIL("chaos", ampd=0.8, ampmus=(0.6, 1.0)),
     ],
 )
 

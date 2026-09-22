@@ -444,7 +444,7 @@ def _role_pool() -> dict:
     # Do NOT also add TUBE_ROLES: the keys are identical, so it would overwrite the merged
     # PLUCK entries with the legacy type-14 versions and resurrect a retired engine here.
     pool.update(kits.PLUCK_ROLES)                     # waveguide voice — plucks + tubes
-    pool.update(kits.CHAOS_ROLES)                     # chaotic-map oscillator — texture/noise
+    pool.update(kits.CHAOS_ROLES)                     # eight chaotic circuits
     pool.update(kits.WTABLE_ROLES)                    # Ableton-sprite wavetable — tonal/bass/pad
     pool["SAMPLE"] = kits.PALETTE_ROLES["SAMPLE"]   # capture engine — texture
     _CAT["SAMPLE"] = "texture"
@@ -454,8 +454,7 @@ def _role_pool() -> dict:
     _CAT.update(kits.MODAL_CAT)                       # each modal material's own role
     for n in list(kits.MALLET_ROLES) + list(kits.BOWED_ROLES) + list(kits.PLUCK_ROLES):
         _CAT[n] = "tonal"
-    for n in kits.CHAOS_ROLES:
-        _CAT[n] = "texture"
+    _CAT.update(kits.CHAOS_CAT)                       # each circuit character's own role
     _CAT["WT PAD"] = "pad"
     _CAT["WT PLUCK"] = "tonal"
     _CAT["WT BASS"] = "bass"
@@ -481,7 +480,7 @@ _ROLE_ORDER.update({s[1]: 400 + i for i, s in enumerate(kits._MALLET_SPEC)})
 _ROLE_ORDER.update({s[1]: 500 + i for i, s in enumerate(kits._BOWED_SPEC)})
 _ROLE_ORDER.update({s[0]: 600 + i for i, s in enumerate(kits._PLUCK_SPEC)})
 _ROLE_ORDER.update({s[0]: 700 + i for i, s in enumerate(kits._TUBE_SPEC)})
-_ROLE_ORDER.update({s[1]: 800 + i for i, s in enumerate(kits._CHAOS_SPEC)})
+_ROLE_ORDER.update({m["name"]: 800 + i for i, m in enumerate(kits._CHAOS_SPEC)})
 _ROLE_ORDER.update({s[0]: 900 + i for i, s in enumerate(kits._WT_SPEC)})
 _ROLE_ORDER.update({s[0]: 1000 + i for i, s in enumerate(kits._BB_SPEC)})
 

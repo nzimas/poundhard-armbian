@@ -17,7 +17,7 @@
 
 ~nTracks = 16;
 ~maxSteps = 32;
-~typeDefs = [\phDrum, \phFm7, \phBuchloid, \phMolly, \phRings, \phBen, \phNoizeop, \phIcarus, \phPlaits, \phShaker, \phModal, \phMallet, \phBowed, \phPluck, \phTube, \phChaos, \phWtable, \phBytebeat, \phSampleVoice, \phCsound, \phSampleVoice, \phJolt];   // 20 = MIC: same playback voice, mic-captured buffer  // /ph/track type index (-1 = empty/unassigned)
+~typeDefs = [\phDrum, \phFm7, \phBuchloid, \phMolly, \phRings, \phBen, \phNoizeop, \phIcarus, \phPlaits, \phShaker, \phModal, \phMallet, \phBowed, \phPluck, \phTube, \phChaosScream, \phWtable, \phBytebeat, \phSampleVoice, \phCsound, \phSampleVoice, \phJolt];   // 20 = MIC: same playback voice, mic-captured buffer  // /ph/track type index (-1 = empty/unassigned)
 // DRUM is split into per-mode defs (chosen from the track's `mode` param at spawn).
 ~drumDefs = [\phDrumKick, \phDrumSnare, \phDrumHat, \phDrumMetal, \phDrumClap, \phDrumTom, \phDrumNoise];
 // PLUCK is a MERGED waveguide voice: `mode` picks the model (0 = plucked stiff string,
@@ -26,6 +26,11 @@
 // palette, like MIC) so projects saved before the merge still load.
 ~wguideDefs = [\phPluck, \phTube];
 ~pluckType = 13;
+// CHAOS: one SynthDef per circuit (synthdefs.scd ~chaosCircuits), picked by the track's
+// `mode` like DRUM's — a voice computes only the circuit it plays.
+~chaosDefs = [\phChaosScream, \phChaosLorenz, \phChaosCrunch, \phChaosStutter,
+	\phChaosFeedback, \phChaosSnap, \phChaosCircuit, \phChaosSwarm];
+~chaosType = 15;
 
 ~ctrl = NetAddr(~ctrlHost, ~ctrlPort);
 ~ready = false;
@@ -474,7 +479,9 @@
 			{ ~drumDefs[(~pstore[t][\mode] ? 0).round.clip(0, 6).asInteger] },   // per-mode drum
 			{ (typeIdx == ~pluckType).if(
 				{ ~wguideDefs[(~pstore[t][\mode] ? 0).round.clip(0, 1).asInteger] },  // pluck | tube
-				{ ~typeDefs[typeIdx.clip(0, ~typeDefs.size - 1)] }) });
+				{ (typeIdx == ~chaosType).if(
+					{ ~chaosDefs[(~pstore[t][\mode] ? 0).round.clip(0, 7).asInteger] },  // circuit
+					{ ~typeDefs[typeIdx.clip(0, ~typeDefs.size - 1)] }) }) });
 		nn = ~stepNote[t][step] ? ~note[t];
 		vv = (~stepVel[t][step] ? ~vel[t]) * velScale;    // ratchet sub-hits decay in velocity
 		pp = ~stepPan[t][step] ? (~pstore[t][\pan] ? 0);
@@ -785,7 +792,9 @@
 				{ ~drumDefs[mode.clip(0, 6)] },
 				{ (typeIdx == ~pluckType).if(
 					{ ~wguideDefs[mode.clip(0, 1)] },                 // pluck | tube
-					{ ~typeDefs[typeIdx.clip(0, ~typeDefs.size - 1)] }) });
+					{ (typeIdx == ~chaosType).if(
+						{ ~chaosDefs[mode.clip(0, 7)] },              // chaos circuit
+						{ ~typeDefs[typeIdx.clip(0, ~typeDefs.size - 1)] }) }) });
 			(def == \phCsound).if({
 				// CSOUND audition: nothing spawns — fire the note at Csound on the preview
 				// pair and make sure the carrier voice exists to bring it back in.

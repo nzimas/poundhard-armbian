@@ -137,7 +137,7 @@ dark — so you can read the whole rig at a glance.
 | 12 | **MALLET** | 🟡 gold | STK ModalBar — marimba / vibraphone / agogo / wood / bells |
 | 13 | **BOWED** | 🟦 teal | STK BandedWG — bowed/struck metal bars, glass harmonica, Tibetan bowl |
 | 14 | **PLUCK** | 🟩 spring | Waveguide voice — `mode` picks **pluck** (DWG stiff string: koto / clav / harp / muted) or **tube** (TwoTube: hollow formant / reedy) |
-| 15 | **CHAOS** | 🟥 red | chaotic-map oscillator — FBSine / Latoocarfian / Henon / Standard / Cusp |
+| 15 | **CHAOS** | 🟥 red | eight chaotic circuits — cross-FM scream, Lorenz, map crunch, logistic stutter, feedback howl, chaotic drum, comparator, feedback swarm; filter → drive → fold → crush |
 | 16 | **WTABLE** | 🟪 violet | Ableton Wavetable rebuild over the Move's own factory sprites |
 | 17 | **BYTEBEAT** | 🟢 green | ByteBeat UGen — 8-bit algorithmic expressions evaluated at audio rate |
 | 18 | **SAMPLE** | 🌹 rose | capture engine — records another engine, mangles it through a **Csound** opcode graph, plays it back |
