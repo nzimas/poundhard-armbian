@@ -1,0 +1,4 @@
+#!/bin/sh
+# Reboot into stock AbletonOS and STAY there (maintenance) until boot-armbian is run
+# on stock. Clean reboot: config.txt is stock, the hop sees the hold file and waits.
+touch /boot/firmware/ph/hold && sync && echo "hold set: next boot stays in stock" && systemctl reboot

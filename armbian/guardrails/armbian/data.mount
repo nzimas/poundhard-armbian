@@ -1,0 +1,16 @@
+# Overrides move-bringup's data.mount. The user's data (UserData, settings, ...)
+# lives at the ROOT of partition 4, side by side with this system, where stock
+# AbletonOS also sees it at /data. So /data is simply a bind of / here.
+[Unit]
+Description=Bind the data partition root at /data (shared with stock AbletonOS)
+DefaultDependencies=no
+Conflicts=umount.target
+After=local-fs-pre.target
+Before=local-fs.target umount.target
+[Mount]
+What=/
+Where=/data
+Type=none
+Options=bind
+[Install]
+WantedBy=local-fs.target

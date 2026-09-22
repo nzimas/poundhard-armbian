@@ -178,6 +178,14 @@ configurable via the `PH_WEB_PORT` environment variable.
 
 ## Install
 
+> **The installer lags the device.** `install.sh` and `armbian/convert.sh` still implement
+> the earlier scheme — Armbian as the default boot in `config.txt` — which is the design
+> that locked the Move out when Armbian failed. The guardrail architecture described in
+> [The system underneath](#boot-stock-is-the-floor-armbian-is-a-one-shot-hop) was applied
+> to the device by hand on 2026-09-22 and lives in `armbian/guardrails/`. **Do not run
+> `convert.sh` on a new unit until it installs that architecture.** Redeploying PoundHard
+> with `install.sh` onto an already-converted Move (stage B only) is unaffected.
+
 **One command, from a stock Move to a working instrument.** `install.sh` is the whole
 bundle: point it at a Move still running Ableton's software and it installs Armbian *and*
 PoundHard, in that order, and hands you back a machine with the appliance menu on screen.
@@ -322,24 +330,65 @@ config.
 This edition replaces Ableton's software with a mainline Linux system. The parts below
 are what the Schwung edition used to get for free, and what PoundHard now provides itself.
 
-### Boot
+### Boot: stock is the floor, Armbian is a one-shot hop
 
-Armbian **trixie**, kernel **6.18.46-current-bcm2711 PREEMPT_RT**, arm64. The Move is a
-Compute Module 4 **Lite** — no eMMC — so everything lives on the SD card, and the
-firmware loads the Armbian kernel **directly** from `config.txt`. There is no
-bootloader stage in between.
+Armbian **trixie**, kernel **6.18.46-current-bcm2711 PREEMPT_RT**, arm64, on a Compute
+Module 4 **Lite** (no eMMC — everything lives on the SD card).
 
-> **u-boot was tried and abandoned.** Partition 4 (`/data`, 54 GB) is formatted with
-> ext4 **`meta_bg`**, and u-boot's ext4 driver cannot read past the first meta block
-> group. Loading the kernel through u-boot therefore worked only from the small root
-> partition, and every route around it cost more than it bought. The firmware reads
-> the kernel itself now.
+**Stock AbletonOS is the default boot, and Armbian is only ever entered through the
+Raspberry Pi firmware's one-shot `tryboot`.** At power-on the firmware reads
+`config.txt` (stock's own, untouched), stock starts, and 4.7 seconds in its
+`ph-hop` script reboots with the `tryboot` flag into `tryboot.txt` — the Armbian
+configuration. Power-on to a working Armbian takes about 45 seconds.
 
-**The escape hatch is `tryboot`.** `reboot '0 tryboot'` boots `tryboot.txt` — the stock
-Ableton configuration — exactly once, without touching the normal boot path. That is
-the way back to stock if something goes wrong, and it needs no card removal, which
-matters: this instrument is built for a user with a severe sight impairment, and
-"just pop the SD card out" is not a recovery procedure.
+The point of doing it this way round is the one-shot: **whatever happens in Armbian — a
+hang, a kernel crash, a watchdog reset, a power cut — the next boot is stock.** Stock
+is a known-good system that is reachable over Wi-Fi, over USB-C and through Move
+Manager, and from it both Armbian's files and the boot partition can be read and
+repaired. The card never has to come out.
+
+> **Why this exists.** On 2026-09-07 the router moved its 5 GHz network to a DFS channel
+> (5560 MHz). The Move's Intel AC-9260 firmware crashes joining it under this kernel, and
+> the system went down with it on every boot — at a point where Wi-Fi, USB and SSH were
+> all already gone. The unclean power-offs then damaged the filesystem. With Armbian as
+> the default boot there was no way back in without taking the card out, which for the
+> person this instrument is built for is not a recovery procedure. See the gotchas.
+
+**The guardrails, each tested against the failure it exists for:**
+
+| Guardrail | What it does | Tested by |
+|---|---|---|
+| One-shot hop (`ph-hop`, stock) | power-on → stock → Armbian; any Armbian failure → stock | 3 reboot cycles, ~45 s each |
+| Safe mode | stock counts hops; Armbian's `ph-boot-ok` resets the count 90 s in if Wi-Fi or USB has an address. Two unconfirmed boots → stock stays up | forcing two unconfirmed boots |
+| Hardware watchdog | systemd pets the BCM2835 watchdog every 15 s; a hung kernel reboots (→ stock → hop) | crashing the kernel with auto-reboot off: recovered in 54 s untouched |
+| Panic reboot | `oops=panic panic=15` on the kernel command line | — |
+| USB-C lifeline | `usb0` owned by **systemd-networkd**, not NetworkManager: 172.16.254.1 with DHCP, same address stock uses | stopping NetworkManager: USB login still works |
+| Self-healing hop | stock updates rewrite a system slot and would delete the hop; `ph-heal-stock` (run by every healthy Armbian boot) puts it back on both slots | deleting it from a slot |
+| Persistent journal | `armbian-ramlog` off, journal on disk with 5 s sync — readable from stock after a crash | the journal that found the Wi-Fi crash |
+| 2.4 GHz-only Wi-Fi | NetworkManager profile with `band=bg`; the 5 GHz profile never autoconnects; `iwlwifi enable_ini=0` | full boots, 0 firmware errors |
+
+**Controls** — on the boot partition, `ph/`:
+
+```
+mode        armbian = hop at every power-on;  stock = stay in stock
+attempts    unconfirmed Armbian boots (safe mode at 2)
+hold        present: stay in stock this boot (set by `boot-stock` on Armbian)
+hop-once    present: hop on this boot only
+log         one line per decision, from both systems
+```
+
+From Armbian, `boot-stock` reboots into stock and stays there for maintenance. From
+stock, `sh /boot/ph/boot-armbian` clears the hold and the counter and hops back.
+
+The files live in `armbian/guardrails/` (`stock/`, `armbian/`, `boot/`).
+
+Both systems share partition 4: Armbian's root sits at the top of it, beside the user
+data, and `/data` inside Armbian is a bind of `/` — so `/data/UserData` is the same
+directory in both systems.
+
+> **u-boot was tried and abandoned.** Partition 4 is formatted with ext4 **`meta_bg`**,
+> and u-boot's ext4 driver cannot read past the first meta block group. The firmware
+> loads the Armbian kernel directly from the FAT boot partition instead.
 
 ### Audio and control: `jackd -d move`
 
@@ -856,6 +905,25 @@ an angular, industrial typeface that suits the hard, percussion-centric aestheti
   running server using PoundHard's **own** `libjackserver` and exactly one file — the
   driver — from RNBO. It is copied into `$PH/lib/jack/` at install time now, and RNBO can
   be deleted. Check what a process actually has mapped before believing a path.
+- **A Wi-Fi driver can take the whole machine down, and it will look like anything else.**
+  For two weeks the Move "froze after exiting PoundHard", then froze at boot, then froze
+  with every service masked. The cause was none of the things being changed: the router
+  had moved its 5 GHz network to a DFS channel (5560 MHz), and the Intel AC-9260 firmware
+  crashes joining it under this kernel (`Microcode SW error`, `FW error in SYNC CMD
+  PHY_CONTEXT_CMD`), about 20 seconds into every boot, taking the system with it. It
+  stayed invisible because `armbian-ramlog` kept the journal in RAM, so every crash took
+  its own evidence with it. The first boot with a persistent journal named it in one
+  line. **Make the journal persistent before debugging anything.** Armbian is now 2.4 GHz
+  only (`band=bg`), and `iwlwifi enable_ini=0` switches off the firmware-dump path.
+- **Two "independent" lifelines that share a dependency are one lifeline.** Wi-Fi and the
+  USB-C network were both NetworkManager connections, so when Wi-Fi took the system down
+  there was no way in at all. `usb0` is owned by systemd-networkd now, and that was
+  proven by stopping NetworkManager and logging in over the cable.
+- **An escape hatch you can only open from inside is not an escape hatch.** `boot-stock`
+  was the recovery path, and it was a command you run on a running, reachable Armbian —
+  which is never the situation you need it for. Recovery has to be the default: stock
+  boots unless Armbian keeps proving itself, and the firmware's one-shot `tryboot`
+  guarantees any failure falls back.
 - **A source-built rootfs carries the UUIDs of the image, not of the card.** `/etc/fstab`
   comes out of the build naming partitions that do not exist on the target. `/` still comes
   up because the kernel is told `root=` on the command line, so the damage is quiet:

@@ -1,0 +1,6 @@
+[Unit]
+Description=Confirm this Armbian boot is healthy (resets stock's hop counter)
+RequiresMountsFor=/boot/firmware
+[Service]
+Type=oneshot
+ExecStart=/usr/local/sbin/ph-boot-ok

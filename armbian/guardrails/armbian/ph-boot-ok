@@ -1,0 +1,16 @@
+#!/bin/sh
+# ph-boot-ok — Armbian confirms it booted healthy, so stock keeps hopping here.
+# Runs 90 s after boot. Healthy = still alive AND reachable on Wi-Fi or USB-C.
+P=/boot/firmware/ph
+mountpoint -q /boot/firmware || { echo "boot partition not mounted"; exit 1; }
+up=$(cut -d' ' -f1 /proc/uptime)
+net=$(ip -4 -o addr show 2>/dev/null | awk '$2 ~ /^(wl|usb|eth|en)/ {print $2"="$4}' | tr '\n' ' ')
+if [ -n "$net" ]; then
+    echo 0 > "$P/attempts"
+    echo "$(date '+%F %T') armbian up=${up}s HEALTHY ($net) - attempts reset" >> "$P/log"
+else
+    echo "$(date '+%F %T') armbian up=${up}s NO NETWORK - not confirming" >> "$P/log"
+fi
+sync
+/usr/local/sbin/ph-heal-stock >> /boot/firmware/ph/heal.log 2>&1 || true
+sync

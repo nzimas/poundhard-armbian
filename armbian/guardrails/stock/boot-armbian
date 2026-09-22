@@ -1,0 +1,6 @@
+#!/bin/sh
+# On stock: clear the hold and the safe-mode counter, and hop into Armbian now.
+P=/boot/ph
+rm -f $P/hold; echo 0 > $P/attempts; echo armbian > $P/mode; touch $P/hop-once; sync
+echo "$(date '+%F %T') stock boot-armbian requested" >> $P/log
+echo "rebooting into Armbian"; sync; reboot

@@ -1,0 +1,21 @@
+#!/bin/sh
+# ph-heal-stock — make sure BOTH stock AbletonOS system slots (p2, p3) still carry
+# the hop that brings the Move into Armbian at power-on. A stock update rewrites a
+# slot wholesale and would delete it; this puts it back. Master copy: boot partition.
+SRC=/boot/firmware/ph/ph-hop
+[ -f "$SRC" ] || { echo "no master ph-hop on the boot partition"; exit 1; }
+rc=0
+for n in 2 3; do
+    dev=/dev/mmcblk0p$n; mnt=/run/ph-heal-p$n
+    mkdir -p "$mnt"
+    mount -o ro "$dev" "$mnt" 2>/dev/null || { echo "p$n: cannot mount"; rc=1; continue; }
+    if cmp -s "$SRC" "$mnt/etc/init.d/ph-hop" && [ "$(readlink "$mnt/etc/rc5.d/S00ph-hop")" = "../init.d/ph-hop" ]; then
+        echo "p$n: hop present"; umount "$mnt"; continue
+    fi
+    [ -d "$mnt/etc/init.d" ] || { echo "p$n: not a stock system, skipping"; umount "$mnt"; continue; }
+    mount -o remount,rw "$mnt" && cp "$SRC" "$mnt/etc/init.d/ph-hop" && chmod 0755 "$mnt/etc/init.d/ph-hop" \
+      && ln -sf ../init.d/ph-hop "$mnt/etc/rc5.d/S00ph-hop" && sync \
+      && echo "p$n: hop REINSTALLED" && echo "$(date '+%F %T') armbian reinstalled ph-hop on p$n" >> /boot/firmware/ph/log || rc=1
+    umount "$mnt"
+done
+exit $rc

@@ -1,0 +1,49 @@
+#!/bin/sh
+# ph-hop — on stock AbletonOS, hand the boot over to Armbian through the RPi
+# firmware's ONE-SHOT tryboot. One-shot is the whole point: whatever happens in
+# Armbian (hang, crash, watchdog, power cut), the next boot is stock again, and
+# stock decides whether to try Armbian once more.
+#
+#   /boot/ph/mode       armbian = hop at every power-on;  anything else = stay in stock
+#   /boot/ph/attempts   hops not yet confirmed healthy by Armbian (ph-boot-ok resets it)
+#   /boot/ph/hold       present = stay in stock, whatever the mode
+#   /boot/ph/hop-once   present = hop on this boot only (manual test), then removed
+#   /boot/ph/log        one line per decision
+#
+# SAFE MODE: two unconfirmed Armbian boots in a row => stay in stock, reachable.
+case "$1" in start) ;; *) exit 0 ;; esac
+P=/boot/ph
+[ -d "$P" ] || exit 0
+log() { echo "$(date '+%F %T') stock up=$(cut -d' ' -f1 /proc/uptime)s $*" >> "$P/log"; }
+MAX=2
+n=$(cat "$P/attempts" 2>/dev/null); case "$n" in ''|*[!0-9]*) n=0 ;; esac
+mode=$(cat "$P/mode" 2>/dev/null)
+if [ -f "$P/hop-once" ]; then rm -f "$P/hop-once"; why="manual hop-once"
+elif [ -f "$P/hold" ]; then log "hold file present: staying in stock"; exit 0
+elif [ "$mode" != armbian ]; then log "mode=${mode:-unset}: staying in stock"; exit 0
+else why="mode=armbian"; fi
+if [ "$n" -ge "$MAX" ]; then
+    log "SAFE MODE: $n Armbian boots never confirmed healthy - staying in stock ($why)"; exit 0
+fi
+echo $((n + 1)) > "$P/attempts"
+log "hopping to Armbian, attempt $((n + 1))/$MAX ($why)"
+sync
+# Clean handover: nothing may be left mid-write. Quota off, filesystems read-only,
+# then the restart syscall with the firmware's tryboot argument (busybox reboot
+# cannot pass one).
+quotaoff /data >/dev/null 2>&1
+mount -o remount,ro /data 2>/dev/null
+mount -o remount,ro /boot 2>/dev/null
+mount -o remount,ro / 2>/dev/null
+sync
+python3 -c '
+import ctypes, os
+os.sync()
+libc = ctypes.CDLL(None, use_errno=True)
+libc.syscall.argtypes = [ctypes.c_long, ctypes.c_ulong, ctypes.c_ulong, ctypes.c_ulong, ctypes.c_char_p]
+libc.syscall(142, 0xfee1dead, 0x28121969, 0xA1B2C3D4, b"0 tryboot")
+'
+# Only reached if the reboot failed: undo, stay in stock, say so.
+mount -o remount,rw / 2>/dev/null; mount -o remount,rw /boot 2>/dev/null; mount -o remount,rw /data 2>/dev/null
+log "tryboot reboot FAILED - staying in stock"
+exit 0

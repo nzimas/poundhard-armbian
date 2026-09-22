@@ -270,6 +270,9 @@ step "phgain compiled"
 $SCP "$HERE/armbian/launcher/launcher.py" "$HERE/armbian/launcher/movedisp.py" "root@${HOST}:/opt/move-launcher/"
 step "appliance launcher"
 $SCP "$HERE"/armbian/sbin/* "root@${HOST}:/usr/local/sbin/"
+# boot-stock belongs to the boot guardrails now (hold file + clean reboot), not the
+# old raw tryboot syscall: see armbian/guardrails/ and the README's Boot section.
+$SCP "$HERE/armbian/guardrails/armbian/boot-stock" "root@${HOST}:/usr/local/sbin/boot-stock"
 $SSH 'chmod +x /usr/local/sbin/move-rt-tune.sh /usr/local/sbin/move-jack-watchdog.sh \
               /usr/local/sbin/move-shutdown.sh /usr/local/sbin/boot-stock'
 step "helper scripts"
@@ -315,5 +318,5 @@ cat <<EOF
     master knob   volume (host-side, works in every appliance)
 
   Back inside PoundHard exits to the menu and tears the stack down.
-  To return to stock AbletonOS for ONE boot:  ssh root@${HOST} /usr/local/sbin/boot-stock
+  To reboot into stock AbletonOS for maintenance:  ssh root@${HOST} /usr/local/sbin/boot-stock
 EOF

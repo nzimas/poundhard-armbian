@@ -1,0 +1,23 @@
+# 2.4 GHz ONLY. The Move's Intel AC-9260 crashes joining 5 GHz DFS channels under the
+# Armbian kernel and takes the system down; band=bg makes that impossible.
+# Copy to /etc/NetworkManager/system-connections/ (mode 0600, root), fill in ssid/psk.
+[connection]
+id=move-wifi-24
+type=wifi
+autoconnect=true
+autoconnect-priority=100
+
+[wifi]
+mode=infrastructure
+ssid=YOUR-2.4GHZ-SSID
+band=bg
+
+[wifi-security]
+key-mgmt=wpa-psk
+psk=YOUR-PASSPHRASE
+
+[ipv4]
+method=auto
+
+[ipv6]
+method=auto
