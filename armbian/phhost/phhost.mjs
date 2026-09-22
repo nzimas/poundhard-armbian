@@ -11,6 +11,7 @@
 import { readFileSync, writeFileSync, mkdirSync } from 'node:fs';
 import { dirname } from 'node:path';
 import { execFile } from 'node:child_process';
+import { register } from 'node:module';
 import { FONTS } from './fonts.mjs';
 
 const W = 128, H = 64, BUFLEN = 1024;
@@ -145,6 +146,8 @@ function sendFrameIfChanged() {
 const MODULE = process.argv[2];
 if (!MODULE) { console.error('usage: phhost.mjs <ui.js>'); process.exit(2); }
 
+// Schwung's shared library (constants, input_filter) comes from phhost itself.
+register('./shared-resolve.mjs', import.meta.url);
 await import(MODULE);
 
 if (typeof globalThis.init === 'function') {

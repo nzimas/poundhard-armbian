@@ -11,7 +11,9 @@
 #
 # It installs, in dependency order:
 #   * Armbian (kernel, dtb, overlays, rootfs) — only if the Move is still stock
+#   * the SuperCollider + JACK runtime (sclang, scsynth, supernova, jackd, UGens)
 #   * PoundHard controller + SuperCollider engine + launch scripts
+#   * Granola (move/bundle/granola.tar.gz) — the second appliance, on the same runtime
 #   * the appliance UI (ui.js) and phhost, the native host that runs it
 #   * phgain    — realtime master-volume stage (compiled ON the device)
 #   * launcher  — the appliance menu you see at boot
@@ -236,6 +238,18 @@ $SSH "mkdir -p $PH/lib/jack
    It is the native Move JACK driver and ships inside the RNBO runtime. Install
    RNBO on the Move once to obtain it; it can be deleted immediately afterwards."
 
+say "SuperCollider + JACK runtime"
+# bin/ lib/ plugins/ share/ under $PH: shared by every appliance (Granola runs on it
+# too). Installed once; a runtime already in place is verified, not replaced, because
+# replacing it under a running jackd-move would pull the server's own binary away.
+if $SSH "test -x $PH/bin/sclang && test -x $PH/bin/scsynth && test -x $PH/bin/jackd && test -f $PH/share/sclang_conf.yaml"; then
+    step "present"
+else
+    PH_SSHOPT="$SSHOPT" "$HERE/move/deploy-bundle.sh" "$HOST" \
+      || die "the SuperCollider runtime did not install — see above"
+    step "installed"
+fi
+
 say "PoundHard controller + engine"
 $SSH "mkdir -p $PH/controller $PH/controller/vendor $PH/sc $PH/logs $PH/ipc"
 tar $TARFLAGS -C "$HERE/controller" -czf - poundhard | $SSH "tar -C $PH/controller -xzf -"
@@ -273,10 +287,45 @@ if [ -f "$HERE/move/schwung-module/poundhard/module.json" ]; then
 fi
 step "ui.js + module.json"
 
+say "Granola"
+# The second appliance: an eight-track granular synth with a sample harvester and a web
+# UI on :7135. Built from github.com/nzimas/granola-move by move/bundle-granola.sh; it
+# runs on the runtime above (scsynth + JPverb) and hosts its ui.js under phhost.
+GR=/data/UserData/granola
+GRMOD=/data/UserData/schwung/modules/overtake/granola
+GRBUNDLE="$HERE/move/bundle/granola.tar.gz"
+[ -f "$GRBUNDLE" ] || die "missing $GRBUNDLE — run move/bundle-granola.sh"
+$SSH "rm -rf /data/.gr-install && mkdir -p /data/.gr-install"
+$SSH "tar -C /data/.gr-install -xzf -" < "$GRBUNDLE"
+# Stop it if it is running: its code is about to be replaced under it. With the NEW
+# stop-stack.sh — the Schwung-era one on older installs killed jackd, and with it the
+# screen and the pads.
+$SSH "sh /data/.gr-install/app/stop-stack.sh >/dev/null 2>&1"
+# Code is replaced wholesale so nothing stale survives; samples/, projects/, state/ and
+# logs/ are the user's and are only ever created, never cleared.
+$SSH "set -e
+      S=/data/.gr-install
+      mkdir -p $GR $GRMOD
+      rm -rf $GR/controller $GR/sc $GR/synthdefs $GR/plugins
+      cp -a \$S/app/. $GR/
+      mkdir -p $GR/samples $GR/projects $GR/state $GR/logs $GR/ipc $GR/harvest-tmp
+      rm -f $GRMOD/exit-hook.sh
+      cp \$S/module/module.json \$S/module/ui.js $GRMOD/
+      chown -R ableton:users $GR $GRMOD
+      chmod +x $GR/*.sh
+      echo \"   \$(cat \$S/SOURCE)\"
+      rm -rf \$S" || die "Granola did not install"
+$SSH "test \$(ls $GR/synthdefs | wc -l) -eq 154 && test -f $GR/plugins/GranolaAirwindows.so" \
+  || die "Granola's Airwindows set is incomplete on the device"
+step "engine, controller, harvester, 154 Airwindows effects, ui.js"
+
 say "native stack"
 $SSH 'mkdir -p /opt/phhost /opt/move-launcher'
-$SCP "$HERE/armbian/phhost/phhost.mjs" "$HERE/armbian/phhost/fonts.mjs" "root@${HOST}:/opt/phhost/"
-step "phhost (Node host for ui.js)"
+$SSH 'mkdir -p /opt/phhost/shared'
+$SCP "$HERE/armbian/phhost/phhost.mjs" "$HERE/armbian/phhost/fonts.mjs" \
+     "$HERE/armbian/phhost/shared-resolve.mjs" "root@${HOST}:/opt/phhost/"
+$SCP "$HERE"/armbian/phhost/shared/* "root@${HOST}:/opt/phhost/shared/"
+step "phhost (Node host for ui.js) + Schwung's shared library"
 $SCP "$HERE/armbian/phgain/phgain.c" "root@${HOST}:/opt/phhost/phgain.c"
 $SSH 'cd /opt/phhost && gcc -O2 -Wall -o phgain phgain.c -ljack -lpthread 2>&1 | head -5; test -x /opt/phhost/phgain' \
   || die "phgain did not compile on the device"
@@ -320,6 +369,18 @@ $SSH 'fail=0
       [ "$p" -gt 0 ] || fail=1
       env -u LD_LIBRARY_PATH timeout 10 jack_lsp 2>/dev/null | grep -q "^system:display" \
         && printf "   %-22s yes\n" "display port" || { printf "   %-22s NO\n" "display port"; fail=1; }
+      # each appliance ui.js must at least load under phhost (imports resolve)
+      for a in poundhard granola; do
+          ui=/data/UserData/schwung/modules/overtake/$a/ui.js
+          if env -u LD_LIBRARY_PATH timeout 5 node --input-type=module -e "
+                import { register } from \"node:module\";
+                register(\"/opt/phhost/shared-resolve.mjs\", \"file:///opt/phhost/\");
+                await import(\"$ui\");" >/dev/null 2>&1; then
+              printf "   %-22s loads\n" "$a ui.js"
+          else
+              printf "   %-22s DOES NOT LOAD\n" "$a ui.js"; fail=1
+          fi
+      done
       exit $fail' \
   || die "post-install checks did not pass — see the lines above"
 
@@ -327,10 +388,11 @@ cat <<EOF
 
   Done. The appliance menu should be on the Move's screen.
 
+    appliances    PoundHard, Granola (web UI on http://${HOST}:7135)
     jogwheel      scroll        push = select
     SHUT DOWN     last entry, push twice to confirm
-    master knob   volume (host-side, works in every appliance)
+    master knob   volume (host-side; Granola claims it as its own level)
 
-  Back inside PoundHard exits to the menu and tears the stack down.
+  Back inside an appliance exits to the menu and tears its stack down.
   To reboot into stock AbletonOS for maintenance:  ssh root@${HOST} /usr/local/sbin/boot-stock
 EOF

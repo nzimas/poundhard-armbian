@@ -24,15 +24,17 @@
 set -euo pipefail
 HERE="$(cd "$(dirname "$0")" && pwd)"
 HOST="${1:-move.local}"
+# install.sh passes its own options (host keys change across stock/Armbian).
+SSHOPT="${PH_SSHOPT:-}"
 DEST="/data/UserData/poundhard"
 BUNDLE="$HERE/bundle/poundhard-sc-runtime.tar.gz"
 
 [ -f "$BUNDLE" ] || { echo "missing runtime bundle: $BUNDLE" >&2; exit 1; }
 
 echo "Installing self-contained SC runtime ($(du -h "$BUNDLE" | cut -f1)) -> $DEST on $HOST"
-ssh "root@$HOST" "mkdir -p $DEST"
-ssh "root@$HOST" "tar -C $DEST -xzf -" < "$BUNDLE"
-ssh "root@$HOST" "
+ssh $SSHOPT "root@$HOST" "mkdir -p $DEST"
+ssh $SSHOPT "root@$HOST" "tar -C $DEST -xzf -" < "$BUNDLE"
+ssh $SSHOPT "root@$HOST" "
   set -e
   chown -R ableton:users $DEST/bin $DEST/lib $DEST/plugins $DEST/share
   # The RT binaries carry file capabilities — and glibc runs a capability-carrying binary
@@ -56,9 +58,9 @@ ssh "root@$HOST" "
 CSBUNDLE="$HERE/bundle/poundhard-csound.tar.gz"
 if [ -f "$CSBUNDLE" ]; then
   echo "Installing Csound runtime ($(du -h "$CSBUNDLE" | cut -f1)) -> $DEST/csound"
-  ssh "root@$HOST" "rm -rf $DEST/csound.new && mkdir -p $DEST/csound.new"
-  ssh "root@$HOST" "tar -C $DEST/csound.new -xzf -" < "$CSBUNDLE"
-  ssh "root@$HOST" "
+  ssh $SSHOPT "root@$HOST" "rm -rf $DEST/csound.new && mkdir -p $DEST/csound.new"
+  ssh $SSHOPT "root@$HOST" "tar -C $DEST/csound.new -xzf -" < "$CSBUNDLE"
+  ssh $SSHOPT "root@$HOST" "
     set -e
     # keep whatever orchestra the controller already shipped
     [ -d $DEST/csound/orc ] && cp -a $DEST/csound/orc $DEST/csound.new/csound/ || true
@@ -87,9 +89,9 @@ fi
 CDPBUNDLE="$HERE/bundle/poundhard-cdp.tar.gz"
 if [ -f "$CDPBUNDLE" ]; then
   echo "Installing CDP ($(du -h "$CDPBUNDLE" | cut -f1)) -> $DEST/cdp"
-  ssh "root@$HOST" "rm -rf $DEST/cdp.new && mkdir -p $DEST/cdp.new"
-  ssh "root@$HOST" "tar -C $DEST/cdp.new -xzf -" < "$CDPBUNDLE"
-  ssh "root@$HOST" "
+  ssh $SSHOPT "root@$HOST" "rm -rf $DEST/cdp.new && mkdir -p $DEST/cdp.new"
+  ssh $SSHOPT "root@$HOST" "tar -C $DEST/cdp.new -xzf -" < "$CDPBUNDLE"
+  ssh $SSHOPT "root@$HOST" "
     set -e
     rm -rf $DEST/cdp && mv $DEST/cdp.new/cdp $DEST/cdp && rm -rf $DEST/cdp.new
     chown -R ableton:users $DEST/cdp
@@ -106,9 +108,9 @@ fi
 LUABUNDLE="$HERE/bundle/poundhard-lua.tar.gz"
 if [ -f "$LUABUNDLE" ]; then
   echo "Installing Lua ($(du -h "$LUABUNDLE" | cut -f1)) -> $DEST/lua"
-  ssh "root@$HOST" "rm -rf $DEST/lua.new && mkdir -p $DEST/lua.new"
-  ssh "root@$HOST" "tar -C $DEST/lua.new -xzf -" < "$LUABUNDLE"
-  ssh "root@$HOST" "
+  ssh $SSHOPT "root@$HOST" "rm -rf $DEST/lua.new && mkdir -p $DEST/lua.new"
+  ssh $SSHOPT "root@$HOST" "tar -C $DEST/lua.new -xzf -" < "$LUABUNDLE"
+  ssh $SSHOPT "root@$HOST" "
     set -e
     rm -rf $DEST/lua && mv $DEST/lua.new/lua $DEST/lua && rm -rf $DEST/lua.new
     chown -R ableton:users $DEST/lua
@@ -123,7 +125,7 @@ fi
 # the loader puts a capped binary in, so if a library is unreachable by RPATH alone it
 # fails HERE, at deploy time, instead of silently leaving the device on 'starting...'.
 echo "Verifying the runtime resolves its libraries with no LD_LIBRARY_PATH ..."
-ssh "root@$HOST" "
+ssh $SSHOPT "root@$HOST" "
   fail=0
   for b in scsynth supernova jackd sclang; do
     case \$b in jackd) arg=--version ;; *) arg=-v ;; esac

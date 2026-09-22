@@ -39,7 +39,6 @@ PAD_COL_SHUTDOWN = 5             # Red - stop
 SHORTCUT_APP     = FIRST         # what the top-left pad launches
 
 GAIN_ADDR = ("127.0.0.1", 7666)          # phgain control socket
-MASTER_CLIENT = "supernova"              # only this client's out is master audio
 VOL_STATE = "/var/lib/move-launcher/volume"
 VOL_STEP  = 0.02                          # ~50 detents across the full range
 CHANNEL   = 15   # status low nibble
@@ -48,6 +47,7 @@ CHANNEL   = 15   # status low nibble
 # the ui.js appliances still expect Schwung's API, which no longer exists.
 LAUNCH = {
     "poundhard": ["/bin/sh", "/data/UserData/poundhard/run-stack.sh"],
+    "granola":   ["/bin/sh", "/data/UserData/granola/run-stack.sh"],
 }
 
 # Appliances whose ui.js we can host natively. Selecting one starts its engine
@@ -56,6 +56,7 @@ LAUNCH = {
 UI_HOST = "/opt/phhost/phhost.mjs"
 UI = {
     "poundhard": "/data/UserData/schwung/modules/overtake/poundhard/ui.js",
+    "granola":   "/data/UserData/schwung/modules/overtake/granola/ui.js",
 }
 
 # Every launchable appliance MUST have a stop route, otherwise there is no way
@@ -63,6 +64,18 @@ UI = {
 # display + jogwheel host this launcher draws through.
 STOP = {
     "poundhard": ["/bin/sh", "/data/UserData/poundhard/stop-stack.sh"],
+    "granola":   ["/bin/sh", "/data/UserData/granola/stop-stack.sh"],
+}
+
+# The JACK client whose output is the appliance's master pair, which goes behind
+# phgain so the host-side master knob works. Only named clients are moved:
+# PoundHard's Csound also connects to system:playback, but its outputs are
+# track returns and must stay where they are. An appliance that claims the
+# master knob in its module.json (capabilities.claims_master_knob, Schwung's
+# contract) owns its own output level instead: it has no entry here, its audio
+# goes straight to system:playback, and the knob is forwarded to its ui.js.
+MASTER_CLIENT = {
+    "poundhard": "supernova",
 }
 
 
@@ -79,8 +92,10 @@ def discover():
                 meta = json.load(f)
         except Exception:
             continue
+        caps = meta.get("capabilities") or {}
         items.append({
             "id": meta.get("id", n),
+            "owns_master": bool(caps.get("claims_master_knob")),
             "name": (meta.get("name") or n).upper(),
             "abbrev": (meta.get("abbrev") or n[:3]).upper(),
             "runnable": meta.get("id", n) in LAUNCH,
@@ -315,9 +330,15 @@ class Launcher:
         # crash ORPHANS the appliance stack; re-entering would then reuse the old
         # controller and inherit the previous session\'s state instead of opening
         # clean. Stop is idempotent and cheap when nothing is running.
-        if it["id"] in STOP:
+        #
+        # And not just our own: the appliances share the SC ports (57110/57120),
+        # so a leftover engine from ANOTHER appliance would hold them and leave
+        # this one half-started. Its own stop route asks its JACK clients to leave
+        # properly; the alternative is the new stack SIGKILLing a JACK client,
+        # which wedges jackd and with it the screen.
+        for _aid, _cmd in STOP.items():
             try:
-                subprocess.run(STOP[it["id"]], timeout=30,
+                subprocess.run(_cmd, timeout=30,
                                stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
             except Exception:
                 pass
@@ -356,8 +377,10 @@ class Launcher:
         must never stop an appliance from making sound.
         """
         c = self.client
-        if c is None:
+        it = self.running
+        if c is None or it is None or it["id"] not in MASTER_CLIENT:
             return
+        master = MASTER_CLIENT[it["id"]]
         moved = []
         try:
             if not c.get_ports("phgain:in_", is_input=True):
@@ -374,7 +397,7 @@ class Launcher:
                     # Csound (poundhard_cs) auto-connects to system:playback but its
                     # outputs are TRACK RETURNS feeding supernova:input_3..34 - moving
                     # those into phgain silently breaks engine 20.
-                    if not name.startswith(MASTER_CLIENT + ":"):
+                    if not name.startswith(master + ":"):
                         continue
                     try:
                         c.disconnect(name, pb)
@@ -678,10 +701,12 @@ def main():
                 batch, events[:] = list(events), []
             ui = app.ui
             if ui is not None and ui.alive:
+                owns_master = bool(app.running and app.running.get("owns_master"))
                 for d in batch:
-                    # master volume is the host's job in every mode; the
-                    # appliance never sees it (ui.js does not import MoveMaster)
-                    if len(d) >= 3 and (d[0] & 0xF0) == 0xB0 and d[1] == CC_MASTER:
+                    # master volume is the host's job unless the appliance claims
+                    # the knob (module.json), in which case it is its own level
+                    if (not owns_master and len(d) >= 3
+                            and (d[0] & 0xF0) == 0xB0 and d[1] == CC_MASTER):
                         v = d[2]
                         app.volume(v if 1 <= v <= 63 else -(128 - v) if v >= 64 else 0)
                         continue

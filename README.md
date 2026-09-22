@@ -422,6 +422,13 @@ API it calls. `phhost` (Node) implements it: `clear_screen`, `fill_rect`, `draw_
 `host_set_refresh_rate`, `host_exit_module` and `move_midi_internal_send`, plus the
 `init` / `tick` / `onMidiMessage*` entry points.
 
+Every appliance ui.js also imports Schwung's shared helpers by their Schwung path
+(`/data/UserData/move-anything/shared/constants.mjs`, `input_filter.mjs`). phhost ships
+those two files itself — unmodified, MIT, in `armbian/phhost/shared/` — and a Node resolve
+hook (`shared-resolve.mjs`) maps the Schwung path onto them. No Schwung install is needed
+on the Move, and a name phhost does not ship fails to resolve rather than being picked up
+from a stale Schwung copy.
+
 Two fonts ship with it, and they are **different fonts, not one scaled**: a 5×7 at
 scale 1 (advance 6) and **Tamzen 8×16** at scale 2 (advance 8). `print` is a genuine
 text primitive — an early version of the host implemented it as *logging*, which sent
@@ -439,11 +446,26 @@ listening to it. `phgain` is a small JACK client that sits between the engines a
 **on the device** at install time, so it links against the same `libjack` the running
 server speaks.
 
+An appliance whose `module.json` sets `capabilities.claims_master_knob` (Schwung's
+contract) owns the knob instead: the launcher forwards it to that ui.js and leaves its
+output out of `phgain`. Granola does this: its master level is part of its projects.
+
 ### The appliance menu
 
 `move-launcher-menu.service` draws a scrollable list on the screen at boot. Scroll with
 the jogwheel, **push to launch**. PoundHard is the first entry; **SHUT DOWN** is the
 last.
+
+Two appliances launch: **PoundHard** and **[Granola](https://github.com/nzimas/granola-move)**,
+an eight-track granular synth with a YouTube sample harvester and a web UI on port 7135.
+Each has three routes in `launcher.py`: `LAUNCH` (its `run-stack.sh`), `UI` (its ui.js,
+run under phhost) and `STOP` (its `stop-stack.sh`, which must never touch jackd). Before
+starting either, the launcher runs **every** stop route: they share the SC ports, and a
+leftover engine from the other one would otherwise have to be SIGKILLed out from under
+JACK. Other folders with a `module.json` are listed as "(no host)".
+
+Granola is installed from `move/bundle/granola.tar.gz`, built from a granola-move checkout
+by `move/bundle-granola.sh`; it runs on PoundHard's SuperCollider runtime (scsynth).
 
 Shutdown is a menu entry rather than a power-button gesture because the Move's power
 button is **not wired to a GPIO** the kernel can see — there is nothing to bind a
@@ -692,6 +714,8 @@ move/schwung-module/poundhard/   module.json  ui.js  exit-hook.sh  dsp/
                         (the directory name is historical — ui.js is now hosted by phhost)
 armbian/launcher/       launcher.py  movedisp.py    the appliance menu + display driver
 armbian/phhost/         phhost.mjs  fonts.mjs       the ui.js host API (Node)
+                        shared-resolve.mjs  shared/  Schwung's constants + input_filter (MIT)
+move/bundle-granola.sh  package granola-move into move/bundle/granola.tar.gz
 armbian/phgain/         phgain.c                    master-volume JACK client
 armbian/systemd/        jackd-move, phgain, move-launcher-menu, move-jack-watchdog, move-rt-tune
 armbian/sbin/           move-rt-tune.sh  move-jack-watchdog.sh  move-shutdown.sh  boot-stock
