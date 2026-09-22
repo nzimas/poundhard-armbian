@@ -653,6 +653,11 @@ MODAL = VoiceSpec(
           curve=Curve.EXP, formatter="float3", musical=(0.001, 0.15)),
         P("modal.release", "Release", unit="s", rmin=0.0, rmax=5.0, default=0.3,
           curve=Curve.EXP, formatter="float2", musical=(0.05, 1.0)),
+        # ring: the bank rings out its own decay after the exciter stops. choke: the whole
+        # sound is closed after Hold, over Release — a gripped cymbal, a closed hat, a gated
+        # drone. The only envelope shape the resonators cannot make by themselves.
+        P("modal.damp", "Damp", curve=Curve.ENUM, enum=["ring", "choke"],
+          default=0, randomize=RandomizePolicy.SAFE),
         P("modal.amp2", "Odd Level", default=1.0, musical=(0.2, 1.0)),
         P("modal.amp3", "Third Level", default=1.0, musical=(0.2, 1.0)),
         P("modal.pos2", "Odd Shift", default=1.0, musical=(0.5, 1.0)),

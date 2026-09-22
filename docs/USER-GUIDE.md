@@ -346,12 +346,22 @@ track — for reasons particular to each, explained there.
   **noise** (blown), **pulses** and **square** (a buzzing drive, locked to a whole-number
   **Divider** of the note, because they only reach the modes on one), and **chirp** (a
   sweep). A held exciter stays open for **Hold** seconds, then releases over **Release**.
+  **Damp** decides how the sound ends: **ring** lets the resonators ring out for as long
+  as Decay says; **choke** closes the whole sound after **Hold**, over **Release** — a
+  closed hat, a gated buzz, a swell cut dead.
   **Fold** can turn the spectrum back on itself (undertones, or mirrored at **Fold Point**),
   and a **Vowel** filter can colour it. The voice **levels itself**: each material and each
-  exciter is measured and brought to the same loudness, and a soft limiter bends rather
-  than clips — so a rolled material never jumps out of the mix. Seven targeted materials
-  drive the generator: wood, metal, glass, bell, gong (struck), a blown bowl and a
-  square-driven buzz. *MODAL replaced MEMBRANE on 2026-09-22; a MEMBRANE track in an older
+  exciter is measured and brought to the same loudness — a long-held drone lands where a
+  short strike does — and a soft limiter bends rather than clips, so a rolled material
+  never jumps out of the mix. The generator rolls from **23 targeted materials** in six
+  envelope families, so a MODAL kit isn't all short metallic pings:
+  **ring** (struck, rings out — wood, metal, glass, bell, gong, body, skin, tick, sub
+  undertones, folded clang), **choke** (struck or pulsed, then cut — hat, choke, gate),
+  **blown** (noise-driven, soft-edged — bowl, breath, brush), **driven** (a held pulse or
+  square drive — buzz, vowel-coloured voice, drone, reed), **swell** (the attack *is* the
+  sound — bowed swell, reverse swell into a cut) and **zap** (a chirp sweeping through the
+  bank). Attacks run from a millisecond to over a second; lengths from a 0.1 s tick to a
+  five-second drone. *MODAL replaced MEMBRANE on 2026-09-22; a MEMBRANE track in an older
   project loads as a default MODAL, ready to re-roll.*
 - **MALLET** — **STK ModalBar** (`StkModalBar`, from sc3-plugins): struck modal bars —
   marimba, vibraphone, agogo, wood block, reso, beats/bells. Pitched by the note (`freq`

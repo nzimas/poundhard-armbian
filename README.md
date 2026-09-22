@@ -133,7 +133,7 @@ dark — so you can read the whole rig at a glance.
 | 8 | **ICARUS** | 🟪 violet | dreamcrusher drone / pad (VarSaw + FB delay) |
 | 9 | **PLAITS** | 🟩 lime | Mutable Plaits — 16-model macro-oscillator |
 | 10 | **SHAKER** | 🟨 amber | STK Shakers — 23 shaker/scraper models |
-| 11 | **MODAL** | 🟥 warm red | modal resonator bank — an exciter through up to 40 tuned resonators: struck or blown wood / metal / glass / bells / gongs. Levels itself, so every material sits at the same loudness |
+| 11 | **MODAL** | 🟥 warm red | modal resonator bank — an exciter through up to 40 tuned resonators: struck, choked, blown, driven, swelled or zapped — wood / metal / glass / bells / gongs / hats / reeds / drones, 23 materials. Levels itself, so every material sits at the same loudness |
 | 12 | **MALLET** | 🟡 gold | STK ModalBar — marimba / vibraphone / agogo / wood / bells |
 | 13 | **BOWED** | 🟦 teal | STK BandedWG — bowed/struck metal bars, glass harmonica, Tibetan bowl |
 | 14 | **PLUCK** | 🟩 spring | Waveguide voice — `mode` picks **pluck** (DWG stiff string: koto / clav / harp / muted) or **tube** (TwoTube: hollow formant / reedy) |

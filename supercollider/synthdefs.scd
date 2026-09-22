@@ -697,7 +697,7 @@
 	// Upstream squares velocity itself; anything over 1 (an accent) is applied as gain.
 	SynthDef(\phModal, { |out = 16, note = 48, vel = 1,
 		exciter = 0, decay = 1, falloff = 1, detune = 0, expo = 1, modes = 24, hold = 0.15,
-		exrate = 3, attack = 0.005, release = 0.3, amp2 = 1, amp3 = 1, pos2 = 1, pos3 = 1,
+		exrate = 3, attack = 0.005, release = 0.3, damp = 0, amp2 = 1, amp3 = 1, pos2 = 1, pos3 = 1,
 		fold = 0, foldpt = 1600, fx = 0.5, fy = 0.5, throat = 0.5, fmix = 0,
 		amp = 0.9, pan = 0|
 		var v = vel.clip(0, 2).max(0.03);
@@ -706,8 +706,12 @@
 		var sig = PhModal.ar(note.clip(12, 120).midicps, v.min(1), gate,
 			amp2, amp3, pos2, pos3, fold.round, foldpt, exciter.round, div, attack, release,
 			modes.round, detune, expo, falloff, decay, fx, fy, throat, fmix,
-			level: 2.0);
-		sig = LeakDC.ar(sig) * v.max(1) * amp;
+			level: 2.0, hold: hold.clip(0.01, 4));
+		// Damp = choke: close the whole sound after `hold`, over `release` — the resonators
+		// alone can only ring out. Ring leaves them to their own decay.
+		var choke = Select.kr(damp.round.clip(0, 1), [DC.kr(1),
+			EnvGen.kr(Env([1, 1, 0], [hold.clip(0.01, 4), release.clip(0.005, 5)], [0, -4]))]);
+		sig = LeakDC.ar(sig) * v.max(1) * amp * choke;
 		DetectSilence.ar(sig, 0.0003, 0.2, doneAction: 2);
 		Line.kr(0, 1, 12.0, doneAction: 2);
 		~voiceOut.(out, ~killbad.(~spread.(sig, pan)));

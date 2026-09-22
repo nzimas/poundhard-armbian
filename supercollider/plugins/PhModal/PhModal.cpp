@@ -7,7 +7,8 @@
 // actually changes, because recomputing forty modes is not free):
 //   0 freq (Hz)  1 vel (0..1)  2 gate (>0 sounds; falling to 0 releases a held exciter)
 //   3..21  upstream's parameters in upstream's order (see phmodal_core.hpp)
-//   22 level (linear)
+//   22 level (linear)  23 hold (s): how long a held exciter is held — the levelling
+//   measures how far the bank builds over exactly that time
 // One output: mono audio, levelled and soft-limited, never above full scale.
 #include "phmodal_core.hpp"
 #include "SC_PlugIn.h"
@@ -25,7 +26,7 @@ static void PhModal_next(PhModal *unit, int inNumSamples);
 static void PhModal_Ctor(PhModal *unit);
 static void PhModal_Dtor(PhModal *unit);
 
-enum { kFreq = 0, kVel = 1, kGate = 2, kFirstParam = 3, kLevel = kFirstParam + phmodal::NPARAM };
+enum { kFreq = 0, kVel = 1, kGate = 2, kFirstParam = 3, kLevel = kFirstParam + phmodal::NPARAM, kHold = kLevel + 1 };
 
 static void pushParams(PhModal *unit, bool force) {
     for (int p = 0; p < phmodal::NPARAM; ++p) {
@@ -49,6 +50,7 @@ void PhModal_Ctor(PhModal *unit) {
     unit->voice = new (mem) phmodal::Voice();
     unit->voice->init(static_cast<float>(SAMPLERATE));
     pushParams(unit, true);
+    unit->voice->setHold(IN0(kHold));
     unit->gateOpen = IN0(kGate) > 0.f;
     if (unit->gateOpen) unit->voice->noteOn(IN0(kFreq), IN0(kVel));
     SETCALC(PhModal_next);
@@ -64,6 +66,7 @@ void PhModal_Dtor(PhModal *unit) {
 
 void PhModal_next(PhModal *unit, int inNumSamples) {
     pushParams(unit, false);
+    unit->voice->setHold(IN0(kHold));   // re-levels only if it changed
     const bool open = IN0(kGate) > 0.f;
     if (open && !unit->gateOpen) unit->voice->noteOn(IN0(kFreq), IN0(kVel));   // retrigger
     if (!open && unit->gateOpen) unit->voice->noteOff();

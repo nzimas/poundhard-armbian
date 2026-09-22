@@ -547,42 +547,123 @@ _SHAKER_WEIGHTS = {"SHK MARACA": 3, "SHK CABASA": 2, "SHK SEKERE": 2, "SHK GUIRO
 
 
 # --------------------------------------------------------------------------- #
-# MODAL (PhModal, crispinha's modal synth) — materials. The spectrum is the material:
-# how many modes, how far from harmonic, how steeply they fall away and how long they
-# ring. Struck materials dominate (this is a percussion instrument); the bowl and the buzz
-# hold their exciter open for colour. The divider is an index into MODAL_DIVIDERS
-# (1,2,3,4,6,8): the buzz stays on odd ones, where a square drives the modes on resonance.
-# (name, exciter, modes, inharmonic, stretch, falloff, decay, notes, octave, extra bands)
+# MODAL (PhModal, crispinha's modal synth) — materials, grouped by ENVELOPE FAMILY so a
+# kit does not come out as one shape (an instant strike and an exponential ring) in
+# different metals:
+#
+#   ring    struck, rings its own decay          wood metal glass bell gong body skin
+#                                                tick sub(undertones) clang(foldback)
+#   choke   struck or driven, closed after Hold  hat choke gate
+#   blown   noise exciter, soft edges            bowl breath(vowel) brush
+#   driven  pulse/square held open               buzz voice(vowel) drone reed
+#   swell   attack longer than the strike        swell reverse(swell into a choke)
+#   zap     chirp                                zap
+#
+# Octaves are relative to the generator's root, A1 (55 Hz): wood at A3, glass at A4, a
+# tick at A5, a body and a gong at A1.
+# Values are in parameter space. Enums: exciter 0 strike/1 noise/2 pulses/3 square/4 chirp;
+# fold 0 stop/1 undertones/2 fold; damp 0 ring/1 choke; exrate indexes MODAL_DIVIDERS
+# (1,2,3,4,6,8) — the square only drives the modes on resonance on an ODD divider.
+# A swell's Hold is always longer than its Attack: the exciter releases from wherever it
+# has got to, so a swell cut off before its peak is just a quiet hit.
 # --------------------------------------------------------------------------- #
+def _M(name, family, exciter, weight, notes, octave, *, fold=0, damp=0, cat, **bands):
+    return {"name": name, "family": family, "exciter": exciter, "weight": weight,
+            "notes": notes, "octave": octave, "fold": fold, "damp": damp, "cat": cat,
+            "bands": {f"modal.{k}": v for k, v in bands.items()}}
+
+
 _MODAL_SPEC = [
-    ("MOD WOOD",  0, (6, 14),  (0.02, 0.12), (0.95, 1.1), (1.2, 2.0), (0.15, 0.5), (0, 3, 5, 7), 0, {}),
-    ("MOD METAL", 0, (24, 40), (0.2, 0.5),   (1.0, 1.3),  (0.3, 0.8), (1.0, 3.0),  (0, 5, 7), 0, {}),
-    ("MOD GLASS", 0, (10, 20), (0.0, 0.05),  (1.3, 1.6),  (0.6, 1.2), (0.8, 2.2),  (0, 7), 12, {}),
-    ("MOD BELL",  0, (16, 30), (0.05, 0.25), (1.1, 1.4),  (0.4, 0.9), (1.5, 3.0),  (0, 7), 12, {}),
-    ("MOD GONG",  0, (30, 40), (0.3, 0.5),   (0.9, 1.1),  (0.3, 0.6), (2.0, 3.0),  (0, 7), -12, {}),
-    ("MOD BOWL",  1, (8, 20),  (0.0, 0.1),   (1.0, 1.3),  (0.8, 1.5), (1.0, 2.5),  (0, 5, 7), 0,
-     {"modal.hold": (0.2, 0.6), "modal.attack": (0.02, 0.12), "modal.release": (0.3, 1.0),
-      "modal.fmix": (0.0, 0.4)}),
-    ("MOD BUZZ",  3, (16, 40), (0.0, 0.08),  (0.95, 1.1), (0.5, 1.2), (0.3, 1.2),  (0, 3, 7), -12,
-     {"modal.hold": (0.05, 0.3), "modal.attack": (0.001, 0.02), "modal.release": (0.05, 0.3),
-      "modal.exrate": (2, 2)}),   # divider 3: odd, so the square drives the modes on resonance
+    # ---- ring: struck, the bank rings out on its own ----
+    _M("MOD WOOD", "ring", 0, 2.0, (0, 3, 5, 7), 24, cat="perc",
+       modes=(6, 14), detune=(0.02, 0.12), expo=(0.95, 1.1), falloff=(1.2, 2.0), decay=(0.15, 0.5)),
+    _M("MOD METAL", "ring", 0, 1.5, (0, 5, 7), 12, cat="perc",
+       modes=(24, 40), detune=(0.2, 0.5), expo=(1.0, 1.3), falloff=(0.3, 0.8), decay=(1.0, 3.0)),
+    _M("MOD GLASS", "ring", 0, 1.0, (0, 7), 36, cat="tonal",
+       modes=(10, 20), detune=(0.0, 0.05), expo=(1.3, 1.6), falloff=(0.6, 1.2), decay=(0.8, 2.2)),
+    _M("MOD BELL", "ring", 0, 1.0, (0, 7), 24, cat="tonal",
+       modes=(16, 30), detune=(0.05, 0.25), expo=(1.1, 1.4), falloff=(0.4, 0.9), decay=(1.5, 3.0)),
+    _M("MOD GONG", "ring", 0, 1.0, (0, 7), 0, cat="perc",
+       modes=(30, 40), detune=(0.3, 0.5), expo=(0.9, 1.1), falloff=(0.3, 0.6), decay=(2.0, 3.0)),
+    _M("MOD BODY", "ring", 0, 1.5, (0,), 0, cat="perc",      # few harmonic modes, low: a thump
+       modes=(2, 5), detune=(0.0, 0.05), expo=(0.98, 1.02), falloff=(2.0, 3.0), decay=(0.12, 0.35)),
+    _M("MOD SKIN", "ring", 0, 1.5, (0, 3, 5, 7), 12, cat="perc",  # membrane-like inharmonic
+       modes=(6, 12), detune=(0.1, 0.25), expo=(0.9, 1.05), falloff=(0.8, 1.5), decay=(0.2, 0.6)),
+    _M("MOD TICK", "ring", 0, 1.0, (0, 5, 7), 48, cat="perc",   # a flat spectrum starts every mode in
+       modes=(16, 32), detune=(0.2, 0.6), expo=(1.1, 1.5), falloff=(0.4, 0.9), decay=(0.1, 0.25)),  # phase: kept off 0.4
+    _M("MOD SUB", "ring", 0, 0.75, (0, 7), 12, fold=1, cat="perc",   # undertones: below the note
+       modes=(8, 20), detune=(0.0, 0.1), expo=(0.95, 1.1), falloff=(0.6, 1.2), decay=(0.8, 2.0)),
+    _M("MOD CLANG", "ring", 0, 0.75, (0, 5), 12, fold=2, cat="perc",  # spectrum folded back
+       modes=(20, 40), detune=(0.1, 0.4), expo=(1.0, 1.3), falloff=(0.3, 0.8), decay=(0.6, 1.8),
+       foldpt=(400.0, 2500.0)),
+    # ---- choke: closed after Hold, over Release ----
+    _M("MOD HAT", "choke", 0, 1.5, (0, 5), 48, damp=1, cat="perc",
+       modes=(24, 40), detune=(0.3, 0.7), expo=(1.1, 1.5), falloff=(0.2, 0.5), decay=(0.5, 1.5),
+       hold=(0.02, 0.08), release=(0.02, 0.1), amp=(0.8, 1.4)),   # choked in <0.2 s: +4 dB
+    _M("MOD CHOKE", "choke", 0, 1.0, (0, 5, 7), 12, damp=1, cat="perc",
+       modes=(24, 40), detune=(0.2, 0.5), expo=(1.0, 1.3), falloff=(0.3, 0.7), decay=(1.5, 3.0),
+       hold=(0.08, 0.3), release=(0.05, 0.25)),
+    _M("MOD GATE", "choke", 2, 0.75, (0, 3, 7), 12, damp=1, cat="texture",
+       modes=(16, 40), detune=(0.0, 0.1), expo=(0.95, 1.1), falloff=(0.5, 1.2), decay=(0.5, 1.5),
+       hold=(0.1, 0.4), release=(0.01, 0.05), attack=(0.001, 0.01), exrate=(0, 2)),
+    # ---- blown: a noise exciter, soft edges ----
+    _M("MOD BOWL", "blown", 1, 1.0, (0, 5, 7), 24, cat="pad",
+       modes=(8, 20), detune=(0.0, 0.1), expo=(1.0, 1.3), falloff=(0.8, 1.5), decay=(1.0, 2.5),
+       hold=(0.2, 0.6), attack=(0.02, 0.12), release=(0.3, 1.0), fmix=(0.0, 0.4)),
+    _M("MOD BREATH", "blown", 1, 1.0, (0, 3, 7), 36, cat="tonal",   # breathy, vowel-coloured
+       modes=(3, 8), detune=(0.0, 0.05), expo=(0.98, 1.05), falloff=(1.0, 2.0), decay=(0.3, 1.0),
+       hold=(0.15, 0.5), attack=(0.05, 0.3), release=(0.2, 0.8), fmix=(0.4, 0.9)),
+    _M("MOD BRUSH", "blown", 1, 1.0, (0, 5), 24, cat="perc",         # a scraped burst
+       modes=(12, 30), detune=(0.1, 0.4), expo=(1.0, 1.3), falloff=(0.3, 0.8), decay=(0.2, 0.6),
+       hold=(0.03, 0.12), attack=(0.001, 0.01), release=(0.05, 0.2), amp=(0.35, 0.8)),
+    # ---- driven: a pulse train or square held open ----
+    _M("MOD BUZZ", "driven", 3, 1.0, (0, 3, 7), 12, cat="texture",
+       modes=(16, 40), detune=(0.0, 0.08), expo=(0.95, 1.1), falloff=(0.5, 1.2), decay=(0.3, 1.2),
+       hold=(0.05, 0.3), attack=(0.001, 0.02), release=(0.05, 0.3), exrate=(2, 2),
+       amp=(0.35, 0.75)),   # a held drive sits a few dB above a strike: trimmed
+    _M("MOD VOICE", "driven", 2, 1.0, (0, 3, 5, 7), 24, cat="tonal",  # formant-coloured drive
+       modes=(20, 40), detune=(0.0, 0.02), expo=(0.99, 1.01), falloff=(0.6, 1.2), decay=(0.5, 1.5),
+       hold=(0.15, 0.6), attack=(0.02, 0.15), release=(0.1, 0.5), exrate=(0, 1), fmix=(0.5, 1.0),
+       amp=(0.4, 0.85)),
+    _M("MOD DRONE", "driven", 3, 1.0, (0, 7), 0, cat="pad",
+       modes=(12, 30), detune=(0.0, 0.15), expo=(0.95, 1.2), falloff=(0.8, 1.5), decay=(1.5, 3.0),
+       hold=(0.8, 2.0), attack=(0.1, 0.5), release=(0.5, 1.5), exrate=(0, 0),
+       amp=(0.4, 0.8)),
+    _M("MOD REED", "driven", 3, 0.5, (0, 3, 7), 24, cat="tonal",     # even divider: thin, reedy
+       modes=(10, 24), detune=(0.0, 0.03), expo=(0.99, 1.02), falloff=(0.8, 1.6), decay=(0.3, 1.0),
+       hold=(0.1, 0.4), attack=(0.01, 0.06), release=(0.05, 0.3), exrate=(3, 3),
+       amp=(0.45, 0.9)),
+    # ---- swell: the attack is the sound ----
+    _M("MOD SWELL", "swell", 1, 1.0, (0, 5, 7), 12, cat="pad",       # bowed metal
+       modes=(20, 40), detune=(0.1, 0.4), expo=(1.0, 1.3), falloff=(0.4, 0.9), decay=(1.5, 3.0),
+       attack=(0.3, 0.8), hold=(0.9, 1.6), release=(0.3, 1.0), amp=(0.7, 1.3)),
+    _M("MOD REVERSE", "swell", 2, 0.5, (0, 7), 12, damp=1, cat="texture",  # swells into a cut
+       modes=(20, 40), detune=(0.2, 0.5), expo=(1.0, 1.3), falloff=(0.3, 0.7), decay=(1.5, 3.0),
+       attack=(0.2, 0.6), hold=(0.65, 1.0), release=(0.01, 0.03), exrate=(0, 0)),
+    # ---- zap: a chirp through the bank ----
+    _M("MOD ZAP", "zap", 4, 1.0, (0, 5, 7), 24, cat="texture",
+       modes=(8, 24), detune=(0.0, 0.3), expo=(0.95, 1.3), falloff=(0.5, 1.2), decay=(0.2, 0.8),
+       hold=(0.04, 0.2), attack=(0.001, 0.01), release=(0.03, 0.2), exrate=(0, 3),
+       amp=(0.4, 0.65)),   # a chirp scatters by where its sweep crosses the modes: set ~5 dB down
 ]
 
 
-def _modal_role(spec) -> Role:
-    name, exciter, modes, inh, stretch, fall, decay, notes, octave, extra = spec
-    bands = {"modal.modes": modes, "modal.detune": inh, "modal.expo": stretch,
-             "modal.falloff": fall, "modal.decay": decay}
-    bands.update(extra)
-    return Role(name, "MODAL", note_choices=notes, octave=octave,
-                fixed={"modal.exciter": float(exciter), "modal.fold": 0.0},
-                bands=bands, vel=(0.8, 1.05))
+def _modal_role(m: dict) -> Role:
+    fixed = {"modal.exciter": float(m["exciter"]), "modal.damp": float(m["damp"])}
+    bands = dict(m["bands"])
+    if isinstance(m["fold"], tuple):
+        bands["modal.fold"] = m["fold"]
+    else:
+        fixed["modal.fold"] = float(m["fold"])
+    return Role(m["name"], "MODAL", note_choices=m["notes"], octave=m["octave"],
+                fixed=fixed, bands=bands, vel=(0.8, 1.05))
 
 
-MODAL_ROLES: dict[str, Role] = {s[0]: _modal_role(s) for s in _MODAL_SPEC}
+MODAL_ROLES: dict[str, Role] = {m["name"]: _modal_role(m) for m in _MODAL_SPEC}
+MODAL_CAT: dict[str, str] = {m["name"]: m["cat"] for m in _MODAL_SPEC}
+MODAL_FAMILY: dict[str, str] = {m["name"]: m["family"] for m in _MODAL_SPEC}
 PALETTE_ROLES["MODAL"] = MODAL_ROLES["MOD WOOD"]
-_MODAL_WEIGHTS = {"MOD WOOD": 3, "MOD METAL": 3, "MOD GLASS": 2, "MOD BELL": 2,
-                  "MOD GONG": 1, "MOD BOWL": 1, "MOD BUZZ": 1}
+_MODAL_WEIGHTS = {m["name"]: m["weight"] for m in _MODAL_SPEC}
 
 
 # --------------------------------------------------------------------------- #

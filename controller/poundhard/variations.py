@@ -451,11 +451,7 @@ def _role_pool() -> dict:
     pool.update(kits.BYTEBEAT_ROLES)                  # ByteBeat UGen — glitch/texture
     for n in kits.SHAKER_ROLES:
         _CAT[n] = "perc"
-    # modal materials: struck wood/metal/gong are percussion, glass and bell are tonal,
-    # the blown bowl is a pad and the square-driven buzz is texture
-    _CAT.update({"MOD WOOD": "perc", "MOD METAL": "perc", "MOD GONG": "perc",
-                 "MOD GLASS": "tonal", "MOD BELL": "tonal", "MOD BOWL": "pad",
-                 "MOD BUZZ": "texture"})
+    _CAT.update(kits.MODAL_CAT)                       # each modal material's own role
     for n in list(kits.MALLET_ROLES) + list(kits.BOWED_ROLES) + list(kits.PLUCK_ROLES):
         _CAT[n] = "tonal"
     for n in kits.CHAOS_ROLES:
@@ -480,7 +476,7 @@ _ROLE_ORDER = {r.name: i for i, r in enumerate(kits.ROLES)}
 _ROLE_ORDER.update({s[1]: 100 + s[0] for s in kits._PLAITS_SPEC})
 # SHAKER, MODAL, MALLET, BOWED blocks sort after PLAITS (palette order 9..12)
 _ROLE_ORDER.update({s[1]: 200 + i for i, s in enumerate(kits._SHAKER_SPEC)})
-_ROLE_ORDER.update({s[0]: 300 + i for i, s in enumerate(kits._MODAL_SPEC)})
+_ROLE_ORDER.update({m["name"]: 300 + i for i, m in enumerate(kits._MODAL_SPEC)})
 _ROLE_ORDER.update({s[1]: 400 + i for i, s in enumerate(kits._MALLET_SPEC)})
 _ROLE_ORDER.update({s[1]: 500 + i for i, s in enumerate(kits._BOWED_SPEC)})
 _ROLE_ORDER.update({s[0]: 600 + i for i, s in enumerate(kits._PLUCK_SPEC)})

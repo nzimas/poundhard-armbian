@@ -28,11 +28,23 @@ struct Modes {
     friend type of(Modes);
 };
 struct ModeCount { using type = size_t S::*; friend type of(ModeCount); };
+using FF = modal::dsp::physical::FormantFilter;
+struct Formants { using type = FF S::*; friend type of(Formants); };
+struct FormantMix { using type = modal::dsp::num S::*; friend type of(FormantMix); };
+struct FFilters { using type = std::array<modal::dsp::filters::RBJbiquad, 4> FF::*; friend type of(FFilters); };
+struct FGains { using type = std::array<modal::dsp::num, 4> FF::*; friend type of(FGains); };
 template struct Instantiate<Modes, &S::modes>;
 template struct Instantiate<ModeCount, &S::currentModes>;
+template struct Instantiate<Formants, &S::formants>;
+template struct Instantiate<FormantMix, &S::formant_mix>;
+template struct Instantiate<FFilters, &FF::filters>;
+template struct Instantiate<FGains, &FF::gains>;
 } // namespace phmodal::reach
 
 namespace phmodal {
+
+// The window a hit is judged over: the exciter levels were measured over the first 250 ms.
+static constexpr float kHitWindow = 0.25f;
 
 const Range kRange[NPARAM] = {
     {0.f, 1.f, 1.f, false},          // AMP2
@@ -99,7 +111,13 @@ void warmUp() {
     (void)first;
 }
 
+void Voice::setHold(float seconds) {
+    if (std::isfinite(seconds) && seconds != hold_) { hold_ = seconds; if (on_) levelTheSpectrum(); }
+}
+
 void Voice::init(float sampleRate) {
+    sampleRate_ = sampleRate;
+    hold_ = kHitWindow;
     for (int i = 0; i < NPARAM; ++i) value_[i] = kRange[i].def;
     synth_.set_sample_rate(static_cast<modal::dsp::num>(sampleRate));
     dirty_ = true;
@@ -137,30 +155,25 @@ void Voice::apply() {
     levelTheSpectrum();
 }
 
-// How loud this bank is before anything is played through it, so it can be divided out.
-// A struck bank rings at the amplitude its modes are set to, so it comes to the sum of
-// those. A bank held open by an exciter is different: a resonator asked to ring longer is
-// also a narrower one and stands that much further above what is fed into it, so there it
-// is the sum of each amplitude times its ring time. Only modes that sound count: a
-// stretched spectrum puts most of them past Nyquist, undertones put them below hearing, and
-// counting those would divide down the modes you can hear. Both are measured against the
-// spectrum the exciters were levelled through: twenty-four modes falling as 2/k, ringing a
-// second. Mode frequencies depend on the note, so this runs after the coefficients do.
+// ---- The spectrum, levelled -------------------------------------------------------------
+// How loud this bank will be, so it can be divided out: a modal bank's loudness runs some
+// thirty decibels from one material to the next before a note is played.
 //
-// Two changes from NorniOS, for PoundHard's hits.
+// NorniOS (whose idea this is) sums the modes' amplitudes, weighting a held mode by its
+// full ring time. Three things were wrong with that for PoundHard, each found by measuring:
 //
-// STRUCK: NorniOS sums the modes' amplitudes, which assumes they add in step. They only do
-// on a harmonic spectrum; thirty inharmonic modes (a gong) drift apart at once and add by
-// energy, so the amplitude sum over-divided them by 8-10 dB (measured live). Here a struck
-// bank is weighed by the energy it rings with inside the hit (struckEnergy below).
+//  * Modes at different frequencies add by ENERGY over a quarter second, harmonic or not,
+//    struck or driven. An amplitude sum over-divided many-mode banks (a gong came out 8-10
+//    dB quiet, live) and under-divided sparse ones.
+//  * A PoundHard hit is short. A slow resonator never reaches its full level inside it, so
+//    a struck mode counts the energy it rings with in 250 ms, and a held one how far it
+//    builds over the ACTUAL hold (setHold) — a two-second drone builds far past a hit.
+//  * The vowel filter takes 13-22 dB out of a bank at full mix (measured, note- and
+//    vowel-dependent). Its gain at each mode is computed from the biquads themselves.
 //
-// HELD: NorniOS weighs a held mode by its full
-// ring time, which is right for a note held long enough to build up. A PoundHard hit feeds
-// the bank for a fraction of a second, and a slow resonator gets nowhere near its full
-// level in that time: weighing it as if it did made long-ringing materials 10-20 dB too
-// quiet. A mode driven for T seconds builds to t(1 - 0.001^(T/t)) of the input: linear in
-// T for a slow mode, its full t for a fast one. That is the weight here, T = 250 ms.
-static constexpr float kHitWindow = 0.25f;
+// Everything is compared against the reference the exciters were measured through, so a
+// given level is the same loudness whatever the material, the hold and the vowel.
+
 // Energy a struck mode rings with inside the hit window: its envelope falls 60 dB in t,
 // so the integral of its square over T is proportional to t(1 - 0.001^(2T/t)). Over a
 // quarter second, modes whose frequencies are more than a few hertz apart add by energy,
@@ -169,35 +182,64 @@ static inline float struckEnergy(float t) {
     t = std::fabs(t);
     return t > 1e-6f ? t * (1.f - std::pow(0.001f, 2.f * kHitWindow / t)) : 0.f;
 }
-static inline float builtUp(float t) {
+static inline float builtUp(float t, float window) {
     t = std::fabs(t);
-    return t > 1e-6f ? t * (1.f - std::pow(0.001f, kHitWindow / t)) : 0.f;
+    return t > 1e-6f ? t * (1.f - std::pow(0.001f, window / t)) : 0.f;
 }
 
 void Voice::levelTheSpectrum() {
     const auto &modes = synth_.*of(reach::Modes{});
     const int n = static_cast<int>(synth_.*of(reach::ModeCount{}));
-    float struck = 0.f, held = 0.f;
+    const int exciter = static_cast<int>(value_[EXCITER]);
+    const bool isStruck = exciter == IMPULSE;
+
+    // The vowel filter: four band-passes in parallel, mixed with the dry modes. Its gain at
+    // each mode's frequency is exact from the biquads' own coefficients, so a vowel that
+    // takes 13-22 dB out of a bank (measured) is put back for exactly this note and vowel.
+    const auto &ff = synth_.*of(reach::Formants{});
+    const auto &bq = ff.*of(reach::FFilters{});
+    const auto &fg = ff.*of(reach::FGains{});
+    const float mix = static_cast<float>(synth_.*of(reach::FormantMix{}));
+    const float sr = sampleRate_;
+    auto dryWet = [&](float f) -> float {
+        if (mix <= 1e-4f) return 1.f;
+        const std::complex<float> z1 = std::polar(1.f, -2.f * 3.14159265f * f / sr), z2 = z1 * z1;
+        std::complex<float> wet(0.f, 0.f);
+        for (size_t i = 0; i < 4; ++i) {
+            const auto &b = bq[i];
+            const std::complex<float> num = b.b0 + b.b1 * z1 + b.b2 * z2, den = b.a0 + b.a1 * z1 + b.a2 * z2;
+            if (std::abs(den) > 1e-9f) wet += (num / den) * std::pow(10.f, fg[i] / 20.f);
+        }
+        return std::norm((1.f - mix) + mix * wet);   // |T|^2
+    };
+
+    // Each audible mode's ENERGY inside the hit: modes at different frequencies add by
+    // energy over a quarter second, harmonic or not, struck or driven.
+    const float hold = std::max(0.03f, std::min(2.f, hold_));
+    float energy = 0.f;
     for (int i = 0; i < n && i < kModes; ++i) {
         const auto &m = modes[static_cast<size_t>(i)];
         if (!m.play || m.f < 20.f) continue;
-        struck += m.a * m.a * struckEnergy(m.t);
-        held += std::fabs(m.a) * builtUp(m.t);
+        const float e = isStruck ? m.a * m.a * struckEnergy(m.t)
+                                 : (m.a * builtUp(m.t, hold)) * (m.a * builtUp(m.t, hold));
+        energy += e * dryWet(m.f);
     }
+    // The reference the exciters were measured through: 24 modes falling as 2/k, a 1 s
+    // decay, no vowel, a 250 ms hit. A long-held material is levelled to that same hit, so
+    // a two-second drone lands where a quarter-second one does rather than building past it.
     static const float struckRef = [] {
         float w = 0; for (int k = 1; k <= 24; ++k) { const float a = 2.f / k; w += a * a * struckEnergy(a); }
         return std::sqrt(w);
     }();
     static const float heldRef = [] {
-        float w = 0; for (int k = 1; k <= 24; ++k) w += (2.f / k) * builtUp(2.f / k); return w;
+        float w = 0; for (int k = 1; k <= 24; ++k) { const float a = 2.f / k, b = a * builtUp(a, kHitWindow); w += b * b; }
+        return std::sqrt(w);
     }();
-    const int exciter = static_cast<int>(value_[EXCITER]);
-    const bool isStruck = exciter == IMPULSE;
-    const float weight = isStruck ? std::sqrt(struck) : held;
+    const float weight = std::sqrt(energy);
     const float ref = isStruck ? struckRef : heldRef;
     const float spectrum = std::max(0.02f, std::min(20.f, weight > 1e-6f ? ref / weight : 1.f));
     const float trim = std::pow(10.f, (kHitTargetDb - hitLevelDb(exciter, noteFreq_, value_[EXRATE])) / 20.f);
-    spectrumGain_ = std::max(1e-4f, std::min(20.f, spectrum * trim));
+    spectrumGain_ = std::max(1e-4f, std::min(40.f, spectrum * trim));
 }
 
 void Voice::noteOn(float freqHz, float velocity) {

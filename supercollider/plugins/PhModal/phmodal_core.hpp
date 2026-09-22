@@ -93,6 +93,9 @@ public:
     void set(int param, float value);          // clamped to upstream's range
     void noteOn(float freqHz, float velocity); // applies pending parameters first
     void noteOff();                            // releases a held exciter
+    // How long a held exciter will be held (s): the levelling measures how far the bank
+    // builds over exactly that time. Set before noteOn; struck materials ignore it.
+    void setHold(float seconds);
 
     // Adds nothing, writes n samples: the voice, levelled, at `level` (linear), ramped
     // across the block, soft-limited. Non-finite samples come out as silence.
@@ -111,6 +114,8 @@ private:
     bool on_ = false;
     float spectrumGain_ = 1.f;
     float noteFreq_ = 261.6f;
+    float hold_ = 0.25f;
+    float sampleRate_ = 48000.f;
     float gain_ = -1.f;   // < 0: the next block jumps straight to its target
 };
 
